@@ -1,17 +1,17 @@
 --[[
-	Title: AWG Factions
-	Author: Anzu
-	Org: http://www.AnzusWarGames.info
-	Version: 0.01
-	Description: This factions mod was written from scratch by Anzu, with 
-				inspiration coming from the original factions mod written by
-				Philpax and the JC2-MP dev team. This script was meant for 
-				public use amongst the JC2-MP community. Anyone is free to use
-				and modify this as long as they give me credit for the code 
-				I've written and don't try to commercialize it. It's a free
-				mod after all, right? :) If you want to help code more features
-				and fix bugs, please clone it on Github!
-					https://github.com/smithb895/JC2-MP-AWGFactions
+    Title: AWG Factions
+    Author: Anzu
+    Org: http://www.AnzusWarGames.info
+    Version: 0.01
+    Description: This factions mod was written from scratch by Anzu, with 
+                inspiration coming from the original factions mod written by
+                Philpax and the JC2-MP dev team. This script was meant for 
+                public use amongst the JC2-MP community. Anyone is free to use
+                and modify this as long as they give me credit for the code 
+                I've written and don't try to commercialize it. It's a free
+                mod after all, right? :) If you want to help code more features
+                and fix bugs, please clone it on Github!
+                    https://github.com/smithb895/JC2-MP-AWGFactions
 --]]
 
 class 'AWGFactions'
@@ -22,15 +22,15 @@ function AWGFactions:__init()
     self.blue = Color(0,0,255)
     self.green = Color(0,255,0)
     self.white = Color(255,255,255)
-	
+    
     -- Init tables
     SQL:Execute("CREATE TABLE IF NOT EXISTS awg_members (steamid VARCHAR UNIQUE, faction VARCHAR, rank INTEGER, last_seen DATETIME DEFAULT CURRENT_TIMESTAMP)")
     SQL:Execute("CREATE TABLE IF NOT EXISTS awg_factions (faction VARCHAR UNIQUE, num_members INTEGER, passwd VARCHAR DEFAULT NULL, salt VARCHAR, created_on DATETIME DEFAULT CURRENT_TIMESTAMP)")
-	    
+        
     -- Indices supported???
     --SQL:Execute("CREATE INDEX steamid_index ON awg_factions(steamid)")
-	
-	Events:Subscribe("PlayerChat", self, self.ParseChat)
+    
+    Events:Subscribe("PlayerChat", self, self.ParseChat)
 end
 
 function AWGFactions:ParseChat(args)
@@ -39,25 +39,25 @@ function AWGFactions:ParseChat(args)
         local msg = string.split(args.text, " ")
         local mySteamID = args.player:GetSteamId().id
         local myName = args.player:GetName()
-		
-		-- Queries
-		self.queryPassSalt = SQL:Query("SELECT passwd,salt FROM awg_factions WHERE faction = (?)")
-		self.queryGetRank = SQL:Query("SELECT rank FROM awg_members WHERE steamid = (?)")
-		self.queryLastSeen = SQL:Query("SELECT last_seen FROM awg_members WHERE steamid = (?)")
-		self.queryIsFaction = SQL:Query("SELECT rowid FROM awg_factions WHERE faction = (?)")
-		self.queryInFaction = SQL:Query("SELECT faction FROM awg_members WHERE steamid = (?)")
-		self.queryFactionEst = SQL:Query("SELECT created_on FROM awg_factions WHERE faction = (?)")
-		self.queryGetMembers = SQL:Query("SELECT steamid FROM awg_members WHERE faction = (?)")
-		self.queryCountMembers = SQL:Query("SELECT num_members FROM awg_factions WHERE faction = (?)")
-		-- Transactions
-		self.querySetPass = SQL:Command("UPDATE awg_factions SET passwd = (?) WHERE faction = (?)")
-		self.querySetRank = SQL:Command("UPDATE awg_members SET rank = (?) WHERE steamid = (?)")
-		self.queryAddMember = SQL:Command("INSERT OR REPLACE INTO awg_members (steamid,faction,rank) VALUES (?,?,?)")
-		self.queryNewFaction = SQL:Command("INSERT INTO awg_factions (faction,passwd,salt) VALUES (?,?,?)")
-		self.queryDelMember = SQL:Command("DELETE FROM awg_members WHERE steamid = (?)")
-		self.queryDelFaction = SQL:Command("DELETE FROM awg_factions WHERE faction = (?)")
-		self.queryDelMembers = SQL:Command("DELETE FROM awg_members WHERE faction = (?)")
-		
+        
+        -- Queries
+        self.queryPassSalt = SQL:Query("SELECT passwd,salt FROM awg_factions WHERE faction = (?)")
+        self.queryGetRank = SQL:Query("SELECT rank FROM awg_members WHERE steamid = (?)")
+        self.queryLastSeen = SQL:Query("SELECT last_seen FROM awg_members WHERE steamid = (?)")
+        self.queryIsFaction = SQL:Query("SELECT rowid FROM awg_factions WHERE faction = (?)")
+        self.queryInFaction = SQL:Query("SELECT faction FROM awg_members WHERE steamid = (?)")
+        self.queryFactionEst = SQL:Query("SELECT created_on FROM awg_factions WHERE faction = (?)")
+        self.queryGetMembers = SQL:Query("SELECT steamid FROM awg_members WHERE faction = (?)")
+        self.queryCountMembers = SQL:Query("SELECT num_members FROM awg_factions WHERE faction = (?)")
+        -- Transactions
+        self.querySetPass = SQL:Command("UPDATE awg_factions SET passwd = (?) WHERE faction = (?)")
+        self.querySetRank = SQL:Command("UPDATE awg_members SET rank = (?) WHERE steamid = (?)")
+        self.queryAddMember = SQL:Command("INSERT OR REPLACE INTO awg_members (steamid,faction,rank) VALUES (?,?,?)")
+        self.queryNewFaction = SQL:Command("INSERT INTO awg_factions (faction,passwd,salt) VALUES (?,?,?)")
+        self.queryDelMember = SQL:Command("DELETE FROM awg_members WHERE steamid = (?)")
+        self.queryDelFaction = SQL:Command("DELETE FROM awg_factions WHERE faction = (?)")
+        self.queryDelMembers = SQL:Command("DELETE FROM awg_members WHERE faction = (?)")
+        
         if msg[2] == "join" then
             if table.count(msg) > 4 then
                 args.player:SendChatMessage(
@@ -78,7 +78,7 @@ function AWGFactions:ParseChat(args)
                         self.queryPassSalt:Bind(1, factionName)
                         result = self.queryPassSalt:Execute()
                         local dbPass = result[1].passwd
-						local salt = result[1].salt
+                        local salt = result[1].salt
                         if string.len(dbPass) > 0 then -- There's a faction password
                             if table.count(msg) ~= 4 then
                                 print("INFO: " .. args.player:GetSteamId().string .. " tried to join private faction " .. factionName .. " without supplying a password")
@@ -92,7 +92,7 @@ function AWGFactions:ParseChat(args)
                                         "Faction password contains invalid chars. Only alphanumeric allowed!",
                                         self.red )
                                 else
-									factionPass = SHA256.ComputeHash(salt .. factionPass)
+                                    factionPass = SHA256.ComputeHash(salt .. factionPass)
                                     if factionPass == dbPass then
                                         if self:JoinFaction(factionName,mySteamID,rank) then
                                             print("INFO: " .. args.player:GetSteamId().string .. " successfully joined private faction " .. factionName)
@@ -134,8 +134,8 @@ function AWGFactions:ParseChat(args)
                                     "Faction password contains invalid chars. Only alphanumeric allowed!",
                                     self.red )
                             else
-								local salt = self.RandString()
-								factionPass = SHA256.ComputeHash(salt .. plaintextPass)
+                                local salt = self.RandString()
+                                factionPass = SHA256.ComputeHash(salt .. plaintextPass)
                                 if self:AddFaction(factionName,factionPass,mySteamID,salt) then
                                     print("INFO: " .. args.player:GetSteamId().string .. " successfully created private faction " .. factionName)
                                     args.player:SendChatMessage(
@@ -150,7 +150,7 @@ function AWGFactions:ParseChat(args)
                             end
                         else
                             local factionPass = ""
-							local factionSalt = ""
+                            local factionSalt = ""
                             if self:AddFaction(factionName,factionPass,mySteamID,factionSalt) then
                                 print("INFO: " .. args.player:GetSteamId().string .. " successfully created public faction " .. factionName)
                                 args.player:SendChatMessage(
@@ -228,7 +228,7 @@ function AWGFactions:AddFaction(faction,passwd,steamid,salt)
     --local transaction = SQL:Transaction()
     self.queryNewFaction:Bind(1, faction)
     self.queryNewFaction:Bind(2, passwd)
-	self.queryNewFaction:Bind(3, salt)
+    self.queryNewFaction:Bind(3, salt)
     self.queryNewFaction:Execute()
     --transaction:Commit()
     local rank = 3
@@ -255,11 +255,11 @@ end
 -- Return bool
 function AWGFactions:JoinFaction(faction,steamid,rank)
     --local transaction = SQL:Transaction()
-	self.queryInFaction:Bind(1, steamid)
-	local result = self.queryInFaction:Execute()
-	if #result > 0 then -- player is already in a faction, so remove them from it
-		self:QuitFaction(steamid,faction)
-	end
+    self.queryInFaction:Bind(1, steamid)
+    local result = self.queryInFaction:Execute()
+    if #result > 0 then -- player is already in a faction, so remove them from it
+        self:QuitFaction(steamid,faction)
+    end
     self.queryAddMember:Bind(1, steamid)
     self.queryAddMember:Bind(2, faction)
     self.queryAddMember:Bind(3, rank)
@@ -291,7 +291,7 @@ function AWGFactions:ChatFaction(myName,myFaction,msg)
     local result = self.queryGetMembers:Execute()
     local factionMembers = {}
     for i = 1, #result do
-		--print(tostring(result[i].steamid))
+        --print(tostring(result[i].steamid))
         factionMembers[result[i].steamid] = true
     end
     for p in Server:GetPlayers() do
@@ -301,25 +301,25 @@ function AWGFactions:ChatFaction(myName,myFaction,msg)
                 self.white )
         end
     end
-	return true
+    return true
 end
 
 function AWGFactions:RandString()
-	math.randomseed(os.time())
-	local randString = ""
-	local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
-	for i = 1, 16 do
-		rnd = math.random(#chars)
-		randString = randString.. string.sub(chars, rnd, rnd)
-	end
-	return randString
+    math.randomseed(os.time())
+    local randString = ""
+    local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
+    for i = 1, 16 do
+        rnd = math.random(#chars)
+        randString = randString.. string.sub(chars, rnd, rnd)
+    end
+    return randString
 end
 
 -- Return bool
 function AWGFactions:SetRank(args)
     -- TODO
     print("SetRank not done yet")
-	return true
+    return true
 end
 
 -- Return INT
