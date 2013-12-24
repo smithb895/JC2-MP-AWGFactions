@@ -151,7 +151,7 @@ function AWGFactions:ParseChat(args)
                         else
                             local factionPass = ""
 							local factionSalt = ""
-                            if self:AddFaction(factionName,factionPass,mySteamID,salt) then
+                            if self:AddFaction(factionName,factionPass,mySteamID,factionSalt) then
                                 print("INFO: " .. args.player:GetSteamId().string .. " successfully created public faction " .. factionName)
                                 args.player:SendChatMessage(
                                     "Successfully created public faction: " .. factionName,
