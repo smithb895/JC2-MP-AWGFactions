@@ -53,6 +53,7 @@ function AWGFactions:ParseChat(args)
         self.queryLastSeen = SQL:Query("SELECT last_seen FROM awg_members WHERE steamid = (?)")
         self.queryIsFaction = SQL:Query("SELECT rowid FROM awg_factions WHERE faction = (?)")
         self.queryInFaction = SQL:Query("SELECT faction FROM awg_members WHERE steamid = (?)")
+        self.queryListFactions = SQL:Query("SELECT faction,num_members FROM awg_factions")
         self.queryFactionEst = SQL:Query("SELECT created_on FROM awg_factions WHERE faction = (?)")
         self.queryGetMembers = SQL:Query("SELECT steamid FROM awg_members WHERE faction = (?)")
         self.queryCountMembers = SQL:Query("SELECT num_members FROM awg_factions WHERE faction = (?)")
@@ -65,6 +66,7 @@ function AWGFactions:ParseChat(args)
         self.queryDelMember = SQL:Command("DELETE FROM awg_members WHERE steamid = (?)")
         self.queryDelFaction = SQL:Command("DELETE FROM awg_factions WHERE faction = (?)")
         self.queryDelMembers = SQL:Command("DELETE FROM awg_members WHERE faction = (?)")
+        self.queryUpdateNumMembers = SQL:Command("UPDATE awg_factions SET num_members = (SELECT COUNT(steamid) FROM awg_members WHERE faction = (:faction)) WHERE faction = (:faction)")
         
         if msg[2] == "join" then
             if table.count(msg) > 4 then
@@ -210,31 +212,25 @@ function AWGFactions:ParseChat(args)
                 local theMembers = self:GetMembersOnline(myFaction)
                 if #theMembers > 0 then
                     args.player:SendChatMessage("****** Online Members ******", awgColors["neonlime"] )
-                    local cnt = 0
-                    local numLeft = #theMembers
-                    local line = ""
-                    for i = 1, #theMembers do
-                        --print("iterating theMembers")
-                        cnt = cnt + 1
-                        numLeft = numLeft - 1
-                        if i == #theMembers then
-                            line = line .. theMembers[i]
-                        else
-                            --print("Adding member to line")
-                            line = line .. theMembers[i] .. ", "
-                        end
-                        if cnt == 5 or numLeft == 0 then
-                            --print("Count reached 5")
-                            cnt = 0
-                            args.player:SendChatMessage(line, awgColors["mediumturquoise"] )
-                            line = ""
-                        end
-                    end
+                    self:ShowList(theMembers,args.player,awgColors["mediumturquoise"])
                 else
                     print("Error, unable to find any members online")
                 end
             else
                 args.player:SendChatMessage("ERROR: You are not in a faction, there is no member list to view!", awgColors["neonorange"] )
+            end
+        elseif msg[2] == "list" then -- list online faction members
+            --self.queryInFaction:Bind(1, mySteamID)
+            local result = self.queryListFactions:Execute()
+            if #result > 0 then
+                args.player:SendChatMessage("****** AWG Factions ******", awgColors["neonlime"] )
+                local factionList = {}
+                for i = 1, #result do
+                    table.insert(factionList, result[i].faction .. " (" .. result[i].num_members .. ")")
+                end
+                self:ShowList(factionList,args.player,awgColors["mediumturquoise"])
+            else
+                args.player:SendChatMessage("No factions found!", awgColors["neonorange"] )
             end
         else -- If not a faction command, treat as faction chat
             local msg = string.gsub(args.text, "/f ", "")
@@ -304,6 +300,9 @@ function AWGFactions:JoinFaction(faction,steamid,rank)
     self.queryAddMember:Bind(2, faction)
     self.queryAddMember:Bind(3, rank)
     self.queryAddMember:Execute()
+    -- Update awg_factions.num_players
+    self.queryUpdateNumMembers:Bind(':faction', faction)
+    self.queryUpdateNumMembers:Execute()
     --transaction:Commit()
     return true
 end
@@ -320,6 +319,9 @@ function AWGFactions:QuitFaction(steamid,faction)
         --local transaction = SQL:Transaction()
         self.queryDelMember:Bind(1, steamid)
         self.queryDelMember:Execute()
+        -- Update awg_factions.num_players
+        self.queryUpdateNumMembers:Bind(':faction', faction)
+        self.queryUpdateNumMembers:Execute()
         --transaction:Commit()
     end
     return true
@@ -337,8 +339,8 @@ function AWGFactions:GetMembersOnline(faction)
     return memberNames
 end
 
+-- Return table (steamids stored as keys)
 function AWGFactions:GetMemberIDs(faction)
-    --self.queryGetMembers = SQL:Query("SELECT steamid FROM awg_members WHERE faction = (?)")
     self.queryGetMembers:Bind(1, faction)
     local result = self.queryGetMembers:Execute()
     local factionMembers = {}
@@ -375,6 +377,30 @@ function AWGFactions:ChatFaction(myName,myFaction,msg)
     return true
 end
 
+function AWGFactions:ShowList(list,player,color)
+    local cnt = 0
+    local numLeft = #list
+    local line = ""
+    for i = 1, #list do
+        --print("iterating list")
+        cnt = cnt + 1
+        numLeft = numLeft - 1
+        if i == #list then
+            line = line .. list[i]
+        else
+            --print("Adding member to line")
+            line = line .. list[i] .. ", "
+        end
+        if cnt == 5 or numLeft == 0 then
+            --print("Count reached 5")
+            cnt = 0
+            player:SendChatMessage(line, color)
+            line = ""
+        end
+    end
+end
+
+-- Returns pseudorandom 16 byte string
 function AWGFactions:RandString()
     math.randomseed(os.time())
     local randString = ""
