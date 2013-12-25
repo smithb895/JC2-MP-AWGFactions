@@ -18,19 +18,26 @@ class 'AWGFactions'
 
 function AWGFactions:__init()
     -- Some init stuph could go here :3
-    self.red = Color(255,0,0)
-    self.blue = Color(0,0,255)
-    self.green = Color(0,255,0)
-    self.white = Color(255,255,255)
     
     -- Init tables
     SQL:Execute("CREATE TABLE IF NOT EXISTS awg_members (steamid VARCHAR UNIQUE, faction VARCHAR, rank INTEGER, last_seen DATETIME DEFAULT CURRENT_TIMESTAMP)")
-    SQL:Execute("CREATE TABLE IF NOT EXISTS awg_factions (faction VARCHAR UNIQUE, num_members INTEGER, passwd VARCHAR DEFAULT NULL, salt VARCHAR, created_on DATETIME DEFAULT CURRENT_TIMESTAMP)")
+    SQL:Execute("CREATE TABLE IF NOT EXISTS awg_factions (faction VARCHAR UNIQUE, color VARCHAR, num_members INTEGER, banned VARCHAR, allies VARCHAR, enemies VARCHAR, passwd VARCHAR DEFAULT NULL, salt VARCHAR, created_on DATETIME DEFAULT CURRENT_TIMESTAMP)")
         
     -- Indices supported???
     --SQL:Execute("CREATE INDEX steamid_index ON awg_factions(steamid)")
     
     Events:Subscribe("PlayerChat", self, self.ParseChat)
+end
+
+function AWGFactions:WipeDB()
+    -- Wipe the database
+    -- This can be run from server console by typing "lua awgfactions AWGFactions:WipeDB()"
+    -- You must reload the module after doing this, otherwise you're going to get errors :P
+    print("Wiping database...")
+    SQL:Execute("DROP TABLE IF EXISTS awg_members")
+    SQL:Execute("DROP TABLE IF EXISTS awg_factions")
+    print("Database wiped.")
+    return true
 end
 
 function AWGFactions:ParseChat(args)
@@ -49,6 +56,7 @@ function AWGFactions:ParseChat(args)
         self.queryFactionEst = SQL:Query("SELECT created_on FROM awg_factions WHERE faction = (?)")
         self.queryGetMembers = SQL:Query("SELECT steamid FROM awg_members WHERE faction = (?)")
         self.queryCountMembers = SQL:Query("SELECT num_members FROM awg_factions WHERE faction = (?)")
+        self.queryGetLeader = SQL:Query("SELECT steamid FROM awg_members WHERE rank = (?) AND faction = (?)")
         -- Transactions
         self.querySetPass = SQL:Command("UPDATE awg_factions SET passwd = (?) WHERE faction = (?)")
         self.querySetRank = SQL:Command("UPDATE awg_members SET rank = (?) WHERE steamid = (?)")
@@ -62,14 +70,14 @@ function AWGFactions:ParseChat(args)
             if table.count(msg) > 4 then
                 args.player:SendChatMessage(
                     "There are too many spaces. Faction names and passwords must NOT contain spaces! Press F5 for help.",
-                    self.red )
+                    awgColors["neonorange"] )
             elseif table.count(msg) > 2 then
                 local factionName = msg[3]
                 -- Should not contain non alphanumeric chars
                 if factionName:match("%W") then
                     args.player:SendChatMessage(
                         "Faction name contains invalid chars. Only alphanumeric allowed!",
-                        self.red )
+                        awgColors["neonorange"] )
                 else
                     self.queryIsFaction:Bind(1, factionName)
                     local result = self.queryIsFaction:Execute()
@@ -81,49 +89,49 @@ function AWGFactions:ParseChat(args)
                         local salt = result[1].salt
                         if string.len(dbPass) > 0 then -- There's a faction password
                             if table.count(msg) ~= 4 then
-                                print("INFO: " .. args.player:GetSteamId().string .. " tried to join private faction " .. factionName .. " without supplying a password")
+                                print("INFO: " .. myName .. " tried to join private faction " .. factionName .. " without supplying a password")
                                 args.player:SendChatMessage(
                                     "There is a password required to join this faction. You must provide the correct password to join. Usage: Usage: /f join <faction> <password>",
-                                    self.red )
+                                    awgColors["neonorange"] )
                             else
                                 local factionPass = msg[4]
                                 if factionPass:match("%W") then
                                     args.player:SendChatMessage(
                                         "Faction password contains invalid chars. Only alphanumeric allowed!",
-                                        self.red )
+                                        awgColors["neonorange"] )
                                 else
                                     factionPass = SHA256.ComputeHash(salt .. factionPass)
                                     if factionPass == dbPass then
                                         if self:JoinFaction(factionName,mySteamID,rank) then
-                                            print("INFO: " .. args.player:GetSteamId().string .. " successfully joined private faction " .. factionName)
+                                            print("INFO: " .. myName .. " successfully joined private faction " .. factionName)
                                             args.player:SendChatMessage(
-                                                "Successfully joined " .. factionName,
-                                                self.green )
+                                                "Successfully joined private faction: " .. factionName,
+                                                awgColors["neonlime"] )
                                         else
-                                            print("ERROR: " .. args.player:GetSteamId().string .. " was unable to join private faction " .. factionName .. " . But the password was correct")
+                                            print("ERROR: " .. myName .. " was unable to join private faction " .. factionName .. " . But the password was correct")
                                             args.player:SendChatMessage(
                                                 "ERROR: Failed to join " .. factionName,
-                                                self.red )
+                                                awgColors["red"] )
                                         end
                                     else
-                                        print("WARN: " .. args.player:GetSteamId().string .. " supplied the wrong password for private faction " .. factionName)
+                                        print("WARN: " .. myName .. " supplied the wrong password for private faction " .. factionName)
                                         args.player:SendChatMessage(
                                             "Wrong faction password! Get lost punk!",
-                                            self.red )
+                                            awgColors["neonorange"] )
                                     end
                                 end
                             end
                         else -- No password, go ahead and join
                             if self:JoinFaction(factionName,mySteamID,rank) then
-                                print("INFO: " .. args.player:GetSteamId().string .. " successfully joined public faction " .. factionName)
+                                print("INFO: " .. myName .. " successfully joined public faction " .. factionName)
                                 args.player:SendChatMessage(
-                                    "Successfully joined " .. factionName,
-                                    self.green )
+                                    "Successfully joined public faction: " .. factionName,
+                                    awgColors["neonlime"] )
                             else
-                                print("ERROR: " .. args.player:GetSteamId().string .. " was unable to join public faction " .. factionName)
+                                print("ERROR: " .. myName .. " was unable to join public faction " .. factionName)
                                 args.player:SendChatMessage(
-                                    "ERROR: Failed to join " .. factionName,
-                                    self.red )
+                                    "ERROR: Failed to join public faction: " .. factionName,
+                                    awgColors["red"] )
                             end
                         end
                     else -- Faction doesn't exist, create it, with password
@@ -132,35 +140,35 @@ function AWGFactions:ParseChat(args)
                             if plaintextPass:match("%W") then
                                 args.player:SendChatMessage(
                                     "Faction password contains invalid chars. Only alphanumeric allowed!",
-                                    self.red )
+                                    awgColors["neonorange"] )
                             else
                                 local salt = self.RandString()
                                 factionPass = SHA256.ComputeHash(salt .. plaintextPass)
                                 if self:AddFaction(factionName,factionPass,mySteamID,salt) then
-                                    print("INFO: " .. args.player:GetSteamId().string .. " successfully created private faction " .. factionName)
+                                    print("INFO: " .. myName .. " successfully created private faction " .. factionName)
                                     args.player:SendChatMessage(
                                         "Successfully created private faction: " .. factionName .. " Password: " .. plaintextPass,
-                                        self.green )
+                                        awgColors["neonlime"] )
                                 else
-                                    print("ERROR: " .. args.player:GetSteamId().string .. " was unable to create private faction " .. factionName)
+                                    print("ERROR: " .. myName .. " was unable to create private faction " .. factionName)
                                     args.player:SendChatMessage(
                                         "ERROR: Failed to create new private faction: " .. factionName,
-                                        self.red )
+                                        awgColors["red"] )
                                 end
                             end
                         else
                             local factionPass = ""
                             local factionSalt = ""
                             if self:AddFaction(factionName,factionPass,mySteamID,factionSalt) then
-                                print("INFO: " .. args.player:GetSteamId().string .. " successfully created public faction " .. factionName)
+                                print("INFO: " .. myName .. " successfully created public faction " .. factionName)
                                 args.player:SendChatMessage(
                                     "Successfully created public faction: " .. factionName,
-                                    self.green )
+                                    awgColors["neonlime"] )
                             else
-                                print("ERROR: " .. args.player:GetSteamId().string .. " was unable to create private faction " .. factionName)
+                                print("ERROR: " .. myName .. " was unable to create private faction " .. factionName)
                                 args.player:SendChatMessage(
                                     "ERROR: Failed to create new public faction: " .. factionName,
-                                    self.red )
+                                    awgColors["red"] )
                             end
                         end
                     end
@@ -168,57 +176,89 @@ function AWGFactions:ParseChat(args)
             else -- Show usage help for "/f join"
                 args.player:SendChatMessage(
                     "Join a faction. If faction does not exist, it is created. Password is optional. Usage: /f join <faction> <password>",
-                    self.blue )
+                    awgColors["aquamarine"] )
             end
         elseif msg[2] == "leave" then
-            local checkID = args.player:GetSteamId().id
-            self.queryInFaction:Bind(1, checkID)
+            self.queryInFaction:Bind(1, mySteamID)
             local result = self.queryInFaction:Execute()
             if #result > 0 then -- If any rows are returned, player is in a faction
                 local myFaction = result[1].faction
                 if self:QuitFaction(mySteamID,myFaction) then
-                    print("INFO: " .. args.player:GetSteamId().string .. " left faction " .. myFaction)
+                    print("INFO: " .. myName .. " left faction " .. myFaction)
                     args.player:SendChatMessage(
                         "You left " .. myFaction,
-                        self.green )
+                        awgColors["neonlime"] )
                 else
-                    print("ERROR: " .. args.player:GetSteamId().string .. " was unable to leave faction " .. myFaction)
+                    print("ERROR: " .. myName .. " was unable to leave faction " .. myFaction)
                     args.player:SendChatMessage(
                         "ERROR: Failed to leave faction " .. myFaction,
-                        self.red )
+                        awgColors["red"] )
                 end
             else
                 args.player:SendChatMessage(
                     "You are not currently in any faction!",
-                    self.red )
+                    awgColors["neonorange"] )
             end
         elseif msg[2] == "setrank" then -- check 2 args (player, rank)
             -- Use Command Manager here
             print("Not done yet")
+        elseif msg[2] == "players" then -- list online faction members
+            self.queryInFaction:Bind(1, mySteamID)
+            local result = self.queryInFaction:Execute()
+            if #result > 0 then
+                local myFaction = result[1].faction
+                local theMembers = self:GetMembersOnline(myFaction)
+                if #theMembers > 0 then
+                    args.player:SendChatMessage("****** Online Members ******", awgColors["neonlime"] )
+                    local cnt = 0
+                    local numLeft = #theMembers
+                    local line = ""
+                    for i = 1, #theMembers do
+                        --print("iterating theMembers")
+                        cnt = cnt + 1
+                        numLeft = numLeft - 1
+                        if i == #theMembers then
+                            line = line .. theMembers[i]
+                        else
+                            --print("Adding member to line")
+                            line = line .. theMembers[i] .. ", "
+                        end
+                        if cnt == 5 or numLeft == 0 then
+                            --print("Count reached 5")
+                            cnt = 0
+                            args.player:SendChatMessage(line, awgColors["mediumturquoise"] )
+                            line = ""
+                        end
+                    end
+                else
+                    print("Error, unable to find any members online")
+                end
+            else
+                args.player:SendChatMessage("ERROR: You are not in a faction, there is no member list to view!", awgColors["neonorange"] )
+            end
         else -- If not a faction command, treat as faction chat
             local msg = string.gsub(args.text, "/f ", "")
-            local checkID = args.player:GetSteamId().id
-            self.queryInFaction:Bind(1, checkID)
+            self.queryInFaction:Bind(1, mySteamID)
             local result = self.queryInFaction:Execute()
             if #result > 0 then
                 local myFaction = result[1].faction
                 if not self:ChatFaction(myName,myFaction,msg) then
-                    print("ERROR: " .. args.player:GetSteamId().string .. " was unable to use faction chat for faction: " .. myFaction)
+                    print("ERROR: " .. myName .. " was unable to use faction chat for faction: " .. myFaction)
                     args.player:SendChatMessage(
                         "ERROR: Error sending faction chat message",
-                        self.red )
+                        awgColors["red"] )
                 end
             else
                 args.player:SendChatMessage(
                     "You are trying to use faction chat, but you are not in a faction! Press F5 for help",
-                    self.red )
+                    awgColors["neonorange"] )
             end
         end
         return false
     elseif args.text == "/f" then -- Show usage help
         args.player:SendChatMessage(
             "AWG Factions Mod. Press F5 for detailed help. Example Usage: /f join <faction> <password>",
-            self.blue )
+            awgColors["aquamarine"] )
         return false
     end
 end
@@ -231,7 +271,7 @@ function AWGFactions:AddFaction(faction,passwd,steamid,salt)
     self.queryNewFaction:Bind(3, salt)
     self.queryNewFaction:Execute()
     --transaction:Commit()
-    local rank = 3
+    local rank = #awgRanks
     if self:JoinFaction(faction,steamid,rank) then
         print("INFO: " .. tostring(steamid) .. " joined newly created faction " .. faction .. " as leader")
     else
@@ -285,20 +325,51 @@ function AWGFactions:QuitFaction(steamid,faction)
     return true
 end
 
--- Return bool
-function AWGFactions:ChatFaction(myName,myFaction,msg)
-    self.queryGetMembers:Bind(1, myFaction)
+-- Return table
+function AWGFactions:GetMembersOnline(faction)
+    local factionMembers = self:GetMemberIDs(faction)
+    local memberNames = {}
+    for p in Server:GetPlayers() do
+        if factionMembers[p:GetSteamId().id] then -- add online members' names to table
+            table.insert(memberNames, p:GetName())
+        end
+    end
+    return memberNames
+end
+
+function AWGFactions:GetMemberIDs(faction)
+    --self.queryGetMembers = SQL:Query("SELECT steamid FROM awg_members WHERE faction = (?)")
+    self.queryGetMembers:Bind(1, faction)
     local result = self.queryGetMembers:Execute()
     local factionMembers = {}
+    
     for i = 1, #result do
         --print(tostring(result[i].steamid))
         factionMembers[result[i].steamid] = true
     end
+    return factionMembers
+end
+
+-- Return INT - SteamId().id or 0
+function AWGFactions:GetLeader(faction)
+    local leaderRank = #awgRanks
+    self.queryGetLeader:Bind(1, leaderRank)
+    self.queryGetLeader:Bind(2, faction)
+    local result = self.queryGetLeader:Execute()
+    if #result > 0 then
+        return result[1].steamid
+    end
+    return 0
+end
+
+-- Return bool
+function AWGFactions:ChatFaction(myName,myFaction,msg)
+    local factionMembers = self:GetMemberIDs(myFaction)
     for p in Server:GetPlayers() do
         if factionMembers[p:GetSteamId().id] then -- send message to faction members
             p:SendChatMessage(
                 "[" .. myFaction .. "] " .. myName .. ": " .. msg,
-                self.white )
+                awgColors["white"] )
         end
     end
     return true
