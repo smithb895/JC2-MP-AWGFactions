@@ -30,17 +30,19 @@ function AWGFactions:ModulesLoad()
         {
             name = "AWG Factions",
             text = 
-                "This factions mod was written from scratch by Anzu of www.AnzusWarGames.info,\n" ..
-                "with inspiration for the script coming from the original factions mod written by\n" ..
-                "Philpax and the JC2-MP dev team. Commands are essentially the same as their mod.\n" ..
                 "See usage details below. When using '/f join', if the specified faction name does\n" ..
                 "not already exist, it is created. The password is optional when creating a new \n" ..
                 "faction, but required to join one that has a password.  When a faction leader leaves\n" ..
                 "the faction, it is deleted and all its members are disbanded.\n\n" ..
-                "Usage:\n Joining/Creating a faction:\n  /f join <faction> <password>\n" ..
-                " Leaving a faction:\n  /f leave\n" ..
-                " Using faction chat:\n  /f <chat message>\n" ..
-                "\nMore features coming soon! :)"
+                "Usage:\n\n  Joining/Creating a faction:\n\n    /f join <faction> <password>\n\n" ..
+                "  Leaving a faction:\n\n    /f leave\n\n" ..
+                "  Using faction chat:\n\n    /f <chat message>\n\n" ..
+                "  List faction members:\n\n    /f players\n\n" ..
+                "  List factions:\n\n    /f list\n\n" ..
+                "\n\nMore features coming soon! :)\n\n" ..
+                "\n\nThis factions mod was written from scratch by Anzu of www.AnzusWarGames.info,\n" ..
+                "with inspiration for the script coming from the original factions mod written by\n" ..
+                "Philpax and the JC2-MP dev team.\n"
         } )
 end
 
