@@ -136,8 +136,8 @@ function AWGFactions:ParseChat(args)
                                     awgColors["red"] )
                             end
                         end
-                    else -- Faction doesn't exist, create it, with password
-                        if table.count(msg) > 3 then
+                    else -- Faction doesn't exist, create it
+                        if table.count(msg) > 3 then -- password supplied
                             local plaintextPass = msg[4]
                             if plaintextPass:match("%W") then
                                 args.player:SendChatMessage(
@@ -158,7 +158,7 @@ function AWGFactions:ParseChat(args)
                                         awgColors["red"] )
                                 end
                             end
-                        else
+                        else -- no password supplied, give it a blank password
                             local factionPass = ""
                             local factionSalt = ""
                             if self:AddFaction(factionName,factionPass,mySteamID,factionSalt) then
@@ -203,7 +203,8 @@ function AWGFactions:ParseChat(args)
             end
         elseif msg[2] == "setrank" then -- check 2 args (player, rank)
             -- Use Command Manager here
-            print("Not done yet")
+            print("setrank Not done yet")
+            args.player:SendChatMessage("This command has not yet been implemented!", awgColors["neonorange"] )
         elseif msg[2] == "players" then -- list online faction members
             self.queryInFaction:Bind(1, mySteamID)
             local result = self.queryInFaction:Execute()
@@ -214,7 +215,7 @@ function AWGFactions:ParseChat(args)
                     args.player:SendChatMessage("****** Online Members ******", awgColors["neonlime"] )
                     self:ShowList(theMembers,args.player,awgColors["mediumturquoise"])
                 else
-                    print("Error, unable to find any members online")
+                    print("ERROR: Unable to find any members online for faction: " .. myFaction)
                 end
             else
                 args.player:SendChatMessage("ERROR: You are not in a faction, there is no member list to view!", awgColors["neonorange"] )
@@ -231,6 +232,42 @@ function AWGFactions:ParseChat(args)
                 self:ShowList(factionList,args.player,awgColors["mediumturquoise"])
             else
                 args.player:SendChatMessage("No factions found!", awgColors["neonorange"] )
+            end
+        elseif msg[2] == "goto" then -- teleport to faction member
+            self.queryInFaction:Bind(1, mySteamID)
+            local result = self.queryInFaction:Execute()
+            if #result > 0 then -- If any rows are returned, player is in a faction
+                local myFaction = result[1].faction
+                if #msg < 3 then
+                    args.player:SendChatMessage("No faction member specified. Press F5 for detailed help. Usage: /f goto <player name>",
+                    awgColors["neonorange"] )
+                else
+                    table.remove(msg, 2)
+                    table.remove(msg, 1)
+                    local gotoName = table.concat(msg, " ")
+                    local found = false
+                    for op in Server:GetPlayers() do
+                        if op:GetName() == gotoName then
+                            found = true
+                            local myMembers = self:GetMemberIDs(myFaction)
+                            if myMembers[op:GetSteamId().id] then -- Selected player is in their faction
+                                local gotoPos = op:GetPosition()
+                                args.player:SetPosition(gotoPos)
+                                args.player:SendChatMessage("Teleported to " .. gotoName, awgColors["neonlime"] )
+                            else -- Selected player is not in their faction
+                                args.player:SendChatMessage(gotoName .. " is not in your faction! You can only teleport to your own faction members!",
+                                awgColors["neonorange"] )
+                            end
+                        end
+                    end
+                    if not found then
+                        args.player:SendChatMessage("No online player found with name: " .. gotoName, awgColors["neonorange"] )
+                    end
+                end
+            else
+                args.player:SendChatMessage(
+                    "You are not currently in any faction! You must be in a faction to use /f goto. Press F5 for detailed help.",
+                    awgColors["neonorange"] )
             end
         else -- If not a faction command, treat as faction chat
             local msg = string.gsub(args.text, "/f ", "")
