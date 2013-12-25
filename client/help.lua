@@ -26,7 +26,7 @@ end
 
 
 function AWGFactions:ModulesLoad()
-    Events:FireRegisteredEvent( "HelpAddItem",
+    Events:Fire( "HelpAddItem",
         {
             name = "AWG Factions",
             text = 
@@ -39,6 +39,7 @@ function AWGFactions:ModulesLoad()
                 "  Using faction chat:\n\n    /f <chat message>\n\n" ..
                 "  List faction members:\n\n    /f players\n\n" ..
                 "  List factions:\n\n    /f list\n\n" ..
+                "  Teleport to faction member:\n\n    /f goto <member's name>\n\n" ..
                 "\n\nMore features coming soon! :)\n\n" ..
                 "\n\nThis factions mod was written from scratch by Anzu of www.AnzusWarGames.info,\n" ..
                 "with inspiration for the script coming from the original factions mod written by\n" ..
@@ -47,7 +48,7 @@ function AWGFactions:ModulesLoad()
 end
 
 function AWGFactions:ModuleUnload()
-    Events:FireRegisteredEvent( "HelpRemoveItem",
+    Events:Fire( "HelpRemoveItem",
         {
             name = "AWG Factions"
         } )
