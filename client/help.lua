@@ -26,6 +26,10 @@ end
 
 
 function AWGFactions:ModulesLoad()
+    local validColors = ""
+    for k,_ in pairs(awgColors) do
+        validColors = validColors .. k .. "\n"
+    end
     Events:Fire( "HelpAddItem",
         {
             name = "AWG Factions",
@@ -40,10 +44,12 @@ function AWGFactions:ModulesLoad()
                 "  List faction members:\n\n    /f players\n\n" ..
                 "  List factions:\n\n    /f list\n\n" ..
                 "  Teleport to faction member:\n\n    /f goto <member's name>\n\n" ..
+                "  Set faction color (Must be leader. See color list below.):\n\n    /f setcolor <colorname>\n\n" ..
                 "\n\nMore features coming soon! :)\n\n" ..
                 "\n\nThis factions mod was written from scratch by Anzu of www.AnzusWarGames.info,\n" ..
                 "with inspiration for the script coming from the original factions mod written by\n" ..
-                "Philpax and the JC2-MP dev team.\n"
+                "Philpax and the JC2-MP dev team.\n\n\n" ..
+                "Below is a list of valid faction colors:\n\n" .. validColors
         } )
 end
 
