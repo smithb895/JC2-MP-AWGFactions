@@ -1,4 +1,18 @@
-
+--[[
+    Title: AWG Factions
+    Author: Anzu
+    Org: http://www.AnzusWarGames.info
+    Version: 0.01
+    Description: This factions mod was written from scratch by Anzu, with 
+                inspiration coming from the original factions mod written by
+                Philpax and the JC2-MP dev team. This script was meant for 
+                public use amongst the JC2-MP community. Anyone is free to use
+                and modify this as long as they give me credit for the code 
+                I've written and don't try to commercialize it. It's a free
+                mod after all, right? :) If you want to help code more features
+                and fix bugs, please clone it on Github!
+                    https://github.com/smithb895/JC2-MP-AWGFactions
+--]]
 
 class 'AWGFactions'
 
@@ -70,7 +84,6 @@ function AWGFactions:DrawFactionTag(playerPos,dist,faction,color)
 end
 
 function AWGFactions:RenderTag()
-    --print("Rendering")
     if Game:GetState() ~= GUIState.Game then return end
     --if LocalPlayer:GetWorld() ~= DefaultWorld then return end
     for ply in Client:GetPlayers() do
@@ -80,7 +93,6 @@ function AWGFactions:RenderTag()
                 local dist = playerPos:Distance2D( Camera:GetPosition() )
                 if dist < 800 then
                     local steamid = ply:GetSteamId().id
-                    --print("Drawing tag for faction member: " ..steamid)
                     self:DrawFactionTag(playerPos,dist,factionMembers[steamid][1],factionMembers[steamid][2])
                 end
             end

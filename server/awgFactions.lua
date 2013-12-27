@@ -635,5 +635,3 @@ end
 
 awgFactions = AWGFactions()
 
--- Send out initial table of online faction players
-awgFactions:BroadcastMembers()
