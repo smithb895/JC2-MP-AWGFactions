@@ -37,7 +37,7 @@ function AWGFactions:__init()
     self.sqlListFactions = "SELECT faction,num_members FROM awg_factions"
     --self.sqlFactionEst = "SELECT created_on FROM awg_factions WHERE faction = (?)"
     --self.sqlCountMembers = "SELECT num_members FROM awg_factions WHERE faction = (?)"
-    self.sqlSetPass = "UPDATE awg_factions SET passwd = (?) WHERE faction = (?)"
+    self.sqlSetPass = "UPDATE awg_factions SET passwd = (:pass), salt = (:salt) WHERE faction = (:faction)"
     self.sqlSetRank = "UPDATE awg_members SET rank = (?) WHERE steamid = (?)"
     self.sqlGetRank = "SELECT rank FROM awg_members WHERE steamid = (?)"
     self.sqlUpdateNumMembers = "UPDATE awg_factions SET num_members = (SELECT COUNT(steamid) FROM awg_members WHERE faction = (:faction)) WHERE faction = (:faction)"
@@ -52,6 +52,11 @@ function AWGFactions:__init()
     self.sqlSetColor = "UPDATE awg_factions SET color = (:color) WHERE faction = (:faction)"
     self.sqlIsColorUsed = "SELECT faction FROM awg_factions WHERE color = (?)"
     self.sqlAllMembers = "SELECT m.steamid,m.faction,f.color FROM awg_members m JOIN awg_factions f ON m.faction=f.faction"
+    self.sqlGetBans = "SELECT banned FROM awg_factions WHERE faction = (?)"
+    self.sqlSetBans = "UPDATE awg_factions SET banned = (:bans) WHERE faction = (:faction)"
+    --self.queryLastSeen = SQL:Query(self.sqlLastSeen)
+    --self.queryFactionEst = SQL:Query(self.sqlFactionEst)
+    --self.queryCountMembers = SQL:Query(self.sqlCountMembers)
 
     Events:Subscribe("PlayerChat", self, self.ParseChat)
     Events:Subscribe("PlayerJoin", self, self.BroadcastMembers)
@@ -78,15 +83,6 @@ function AWGFactions:ParseChat(args)
         local msg = string.split(args.text, " ")
         local mySteamID = args.player:GetSteamId().id
         local myName = args.player:GetName()
-        
-        -- Queries
-        --self.queryLastSeen = SQL:Query(self.sqlLastSeen)
-        --self.queryFactionEst = SQL:Query(self.sqlFactionEst)
-        --self.queryCountMembers = SQL:Query(self.sqlCountMembers)
-        
-        -- Transactions
-        self.querySetPass = SQL:Command(self.sqlSetPass)
-        self.querySetRank = SQL:Command(self.sqlSetRank)
         
         if msg[2] == "join" then
             if table.count(msg) > 4 then
@@ -129,17 +125,20 @@ function AWGFactions:ParseChat(args)
                                         local result = self:GetFaction(mySteamID)
                                         if #result > 0 then -- if result > 0, player is in a faction already
                                             self:QuitFaction(mySteamID,result[1].faction,myName)
+                                            local leaveMsg = myName .. " has left the faction!"
+                                            self:MsgFaction(factionName, leaveMsg, awgColors["deeppink"])
                                         end
-                                        if self:JoinFaction(factionName,mySteamID,rank,myName) then
-                                            print("INFO: " .. myName .. " successfully joined private faction " .. factionName)
-                                            args.player:SendChatMessage(
-                                                "Successfully joined private faction: " .. factionName,
-                                                awgColors["neonlime"] )
+                                        if not self:IsBanned(mySteamID,factionName) then
+                                            if self:JoinFaction(factionName,mySteamID,rank,myName) then
+                                                print("INFO: " .. myName .. " successfully joined private faction " .. factionName)
+                                                args.player:SendChatMessage("Successfully joined private faction: " .. factionName,
+                                                    awgColors["neonlime"] )
+                                            else
+                                                print("ERROR: " .. myName .. " was unable to join private faction " .. factionName .. " . But the password was correct")
+                                                args.player:SendChatMessage("ERROR: Failed to join " .. factionName,awgColors["red"] )
+                                            end
                                         else
-                                            print("ERROR: " .. myName .. " was unable to join private faction " .. factionName .. " . But the password was correct")
-                                            args.player:SendChatMessage(
-                                                "ERROR: Failed to join " .. factionName,
-                                                awgColors["red"] )
+                                            args.player:SendChatMessage("You are banned from faction: " .. factionName,awgColors["red"] )
                                         end
                                     else
                                         print("WARN: " .. myName .. " supplied the wrong password for private faction " .. factionName)
@@ -150,20 +149,26 @@ function AWGFactions:ParseChat(args)
                                 end
                             end
                         else -- No password, go ahead and join
-                            local result = self:GetFaction(mySteamID)
-                            if #result > 0 then -- if result > 0, player is in a faction already
-                                self:QuitFaction(mySteamID,result[1].faction,myName)
-                            end
-                            if self:JoinFaction(factionName,mySteamID,rank,myName) then
-                                print("INFO: " .. myName .. " successfully joined public faction " .. factionName)
-                                args.player:SendChatMessage(
-                                    "Successfully joined public faction: " .. factionName,
-                                    awgColors["neonlime"] )
+                            if not self:IsBanned(mySteamID,factionName) then
+                                local result = self:GetFaction(mySteamID)
+                                if #result > 0 then -- if result > 0, player is in a faction already
+                                    self:QuitFaction(mySteamID,result[1].faction,myName)
+                                    local leaveMsg = myName .. " has left the faction!"
+                                    self:MsgFaction(factionName, leaveMsg, awgColors["deeppink"])
+                                end
+                                if self:JoinFaction(factionName,mySteamID,rank,myName) then
+                                    print("INFO: " .. myName .. " successfully joined public faction " .. factionName)
+                                    args.player:SendChatMessage(
+                                        "Successfully joined public faction: " .. factionName,
+                                        awgColors["neonlime"] )
+                                else
+                                    print("ERROR: " .. myName .. " was unable to join public faction " .. factionName)
+                                    args.player:SendChatMessage(
+                                        "ERROR: Failed to join public faction: " .. factionName,
+                                        awgColors["red"] )
+                                end
                             else
-                                print("ERROR: " .. myName .. " was unable to join public faction " .. factionName)
-                                args.player:SendChatMessage(
-                                    "ERROR: Failed to join public faction: " .. factionName,
-                                    awgColors["red"] )
+                                args.player:SendChatMessage("You are banned from faction: " .. factionName,awgColors["red"] )
                             end
                         end
                     else -- Faction doesn't exist, create it
@@ -219,6 +224,8 @@ function AWGFactions:ParseChat(args)
                     args.player:SendChatMessage(
                         "You left " .. myFaction,
                         awgColors["neonlime"] )
+                    local leaveMsg = myName .. " has left the faction!"
+                    self:MsgFaction(myFaction, leaveMsg, awgColors["deeppink"])
                 else
                     print("ERROR: " .. myName .. " was unable to leave faction " .. myFaction)
                     args.player:SendChatMessage(
@@ -355,7 +362,7 @@ function AWGFactions:ParseChat(args)
                     "You are not currently in any faction! You must be in a faction to use /f goto. Press F5 for detailed help.",
                     awgColors["neonorange"] )
             end
-        elseif msg[2] == "setcolor" then -- list online faction members
+        elseif msg[2] == "setcolor" then -- set faction color
             local result = self:GetFaction(mySteamID)
             if #result > 0 then
                 local myFaction = result[1].faction
@@ -376,6 +383,146 @@ function AWGFactions:ParseChat(args)
                     end
                 else
                     args.player:SendChatMessage("You are not the faction leader! Only the faction leader can set the faction color!", awgColors["neonorange"] )
+                end
+            else
+                args.player:SendChatMessage("You are not in a faction!", awgColors["neonorange"] )
+            end
+        elseif msg[2] == "setpass" then -- change faction password
+            local result = self:GetFaction(mySteamID)
+            if #result > 0 then
+                local myFaction = result[1].faction
+                if mySteamID == self:GetLeader(myFaction) then
+                    if #msg == 3 then
+                        local plaintextPass = msg[3]
+                        if plaintextPass:match("%W") then
+                            args.player:SendChatMessage(
+                                "Faction password contains invalid chars. Only alphanumeric allowed!",
+                                awgColors["neonorange"] )
+                        else
+                            local salt = self.RandString()
+                            factionPass = SHA256.ComputeHash(salt .. plaintextPass)
+                            if self:SetPass(myFaction,factionPass,salt) then
+                                print(myName .. " successfully set a new password for faction: " .. myFaction)
+                                args.player:SendChatMessage(
+                                    "Successfully set a new password for faction: " .. myFaction .. " Password: " .. plaintextPass,
+                                    awgColors["neonlime"] )
+                            else
+                                print("ERROR: " .. myName .. " was unable to set a new password for faction: " .. myFaction)
+                                args.player:SendChatMessage(
+                                    "ERROR: Failed to set a new password for faction: " .. myFaction,
+                                    awgColors["red"] )
+                            end
+                        end
+                    else
+                        args.player:SendChatMessage("Set a faction password. Password must NOT contain spaces. Usage: /f setpass <password>", awgColors["neonorange"] )
+                    end
+                else
+                    args.player:SendChatMessage("You are not the faction leader! Only the faction leader can set the faction password!", awgColors["neonorange"] )
+                end
+            else
+                args.player:SendChatMessage("You are not in a faction!", awgColors["neonorange"] )
+            end
+        elseif msg[2] == "kick" then -- kick player from faction
+            local result = self:GetFaction(mySteamID)
+            if #result > 0 then
+                local myFaction = result[1].faction
+                if mySteamID == self:GetLeader(myFaction) then
+                    if #msg > 2 then
+                        table.remove(msg, 2)
+                        table.remove(msg, 1)
+                        local memberName = table.concat(msg, " ")
+                        local memberObj = self:GetPlayerByName(memberName)
+                        if memberObj ~= nil then -- Make sure player is online
+                            local memberSteamID = memberObj:GetSteamId().id
+                            local myFactionMembers = self:GetMemberIDs(myFaction)
+                            if myFactionMembers[memberSteamID] then
+                                local kickMsg = myName .. " has kicked " .. memberName .. " from " .. myFaction
+                                self:QuitFaction(memberSteamID,myFaction,memberName)
+                                self:MsgFaction(myFaction,kickMsg,awgColors["neonlime"])
+                                memberObj:SendChatMessage("You were kicked from the faction!",awgColors["neonlime"])
+                                print(myName .. " kicked " .. memberName .. " from faction: " .. myFaction)
+                            else
+                                args.player:SendChatMessage("Specified player is not in your faction!", awgColors["neonorange"])
+                            end
+                        else
+                            args.player:SendChatMessage("Specified player is not online!", awgColors["neonorange"] )
+                        end
+                    else
+                        args.player:SendChatMessage("Kick member from faction. You must specify a faction member's name. Press F5 for detailed help.  Usage: /f kick <playername>", awgColors["neonorange"] )
+                    end
+                else
+                    args.player:SendChatMessage("You are not the faction leader! Only the faction leader can do this!", awgColors["neonorange"] )
+                end
+            else
+                args.player:SendChatMessage("You are not in a faction!", awgColors["neonorange"] )
+            end
+        elseif msg[2] == "ban" then -- ban player from faction
+            local result = self:GetFaction(mySteamID)
+            if #result > 0 then
+                local myFaction = result[1].faction
+                if mySteamID == self:GetLeader(myFaction) then
+                    if #msg > 2 then
+                        table.remove(msg, 2)
+                        table.remove(msg, 1)
+                        local memberName = table.concat(msg, " ")
+                        local memberObj = self:GetPlayerByName(memberName)
+                        if memberObj ~= nil then -- Make sure player is online
+                            local memberSteamID = memberObj:GetSteamId().id
+                            local myFactionMembers = self:GetMemberIDs(myFaction)
+                            if myFactionMembers[memberSteamID] then
+                                local kickMsg = myName .. " has banned " .. memberName .. " from " .. myFaction
+                                self:QuitFaction(memberSteamID,myFaction,memberName)
+                                if self:AddBan(memberSteamID,myFaction) then
+                                    self:MsgFaction(myFaction,kickMsg,awgColors["neonlime"])
+                                    memberObj:SendChatMessage("You were banned from the faction!",awgColors["neonlime"])
+                                    print(myName .. " banned " .. memberName .. " from faction: " .. myFaction)
+                                else
+                                    args.player:SendChatMessage("Specified player is already banned from your faction!", awgColors["neonorange"])
+                                end
+                            else
+                                args.player:SendChatMessage("Specified player is not in your faction!", awgColors["neonorange"])
+                            end
+                        else
+                            args.player:SendChatMessage("Specified player is not online!", awgColors["neonorange"] )
+                        end
+                    else
+                        args.player:SendChatMessage("Ban member from faction. You must specify a faction member's name. Press F5 for detailed help.  Usage: /f ban <playername>", awgColors["neonorange"] )
+                    end
+                else
+                    args.player:SendChatMessage("You are not the faction leader! Only the faction leader can do this!", awgColors["neonorange"] )
+                end
+            else
+                args.player:SendChatMessage("You are not in a faction!", awgColors["neonorange"] )
+            end
+        elseif msg[2] == "unban" then -- unban player from faction
+            local result = self:GetFaction(mySteamID)
+            if #result > 0 then
+                local myFaction = result[1].faction
+                if mySteamID == self:GetLeader(myFaction) then
+                    if #msg > 2 then
+                        table.remove(msg, 2)
+                        table.remove(msg, 1)
+                        local memberName = table.concat(msg, " ")
+                        local memberObj = self:GetPlayerByName(memberName)
+                        if memberObj ~= nil then -- Make sure player is online
+                            local memberSteamID = memberObj:GetSteamId().id
+                            local myFactionMembers = self:GetMemberIDs(myFaction)
+                            local unbanMsg = myName .. " has unbanned " .. memberName .. " from " .. myFaction
+                            if self:DelBan(memberSteamID,myFaction) then
+                                self:MsgFaction(myFaction,unbanMsg,awgColors["neonlime"])
+                                memberObj:SendChatMessage("You were unbanned from the faction: " .. myFaction,awgColors["neonlime"])
+                                print(myName .. " unbanned " .. memberName .. " from faction: " .. myFaction)
+                            else
+                                args.player:SendChatMessage("Specified player is not banned from your faction!", awgColors["neonorange"])
+                            end
+                        else
+                            args.player:SendChatMessage("Specified player is not online!", awgColors["neonorange"] )
+                        end
+                    else
+                        args.player:SendChatMessage("Unban member from faction. You must specify a player's name. Press F5 for detailed help.  Usage: /f unban <playername>", awgColors["neonorange"] )
+                    end
+                else
+                    args.player:SendChatMessage("You are not the faction leader! Only the faction leader can do this!", awgColors["neonorange"] )
                 end
             else
                 args.player:SendChatMessage("You are not in a faction!", awgColors["neonorange"] )
@@ -479,12 +626,6 @@ end
 -- Return bool
 function AWGFactions:JoinFaction(faction,steamid,rank,name)
     --local transaction = SQL:Transaction()
-    --self.queryInFaction:Bind(1, steamid)
-    --local result = self.queryInFaction:Execute()
-    --local result = self:GetFaction(steamid)
-    --if #result > 0 then -- player is already in a faction, so remove them from it
-    --    self:QuitFaction(steamid,result[1].faction,name)
-    --end
     local joinMsg = name .. " has joined the faction!"
     self:MsgFaction(faction, joinMsg, awgColors["hotpink"])
     self.queryAddMember = SQL:Command(self.sqlAddMember)
@@ -522,8 +663,6 @@ function AWGFactions:QuitFaction(steamid,faction,name)
         self.queryUpdateNumMembers:Execute()
         self:BroadcastMembers()
         --transaction:Commit()
-        local leaveMsg = name .. " has left the faction!"
-        self:MsgFaction(faction, leaveMsg, awgColors["deeppink"])
     end
     return true
 end
@@ -621,6 +760,16 @@ function AWGFactions:RandString()
 end
 
 -- Return bool
+function AWGFactions:SetPass(faction,pass,salt)
+    self.querySetPass = SQL:Command(self.sqlSetPass)
+    self.querySetPass:Bind(':pass', pass)
+    self.querySetPass:Bind(':salt', salt)
+    self.querySetPass:Bind(':faction', faction)
+    self.querySetPass:Execute()
+    return true
+end
+
+-- Return bool
 function AWGFactions:SetRank(steamid,rank)
     self.querySetRank = SQL:Command(self.sqlSetRank)
     self.querySetRank:Bind(1, rank)
@@ -638,6 +787,74 @@ function AWGFactions:GetRank(steamid)
         return tonumber(result[1].rank)
     end
     return 0
+end
+
+-- Return table of faction banned steamids
+function AWGFactions:GetBans(faction)
+    local banned = {}
+    self.queryGetBans = SQL:Query(self.sqlGetBans)
+    self.queryGetBans:Bind(1, faction)
+    local result = self.queryGetBans:Execute()
+    if #result > 0 then
+        local bannedString = result[1].banned
+        if bannedString ~= nil then
+            local bannedTmp = bannedString:split(',')
+            for i=1,#bannedTmp do
+                if string.len(bannedTmp[i]) > 1 then
+                    banned[bannedTmp[i]] = true
+                end
+            end
+        end
+    end
+    return banned
+end
+
+-- Return bool, input bans is a TABLE
+function AWGFactions:SetBans(faction,bans)
+    --print("In SetBans")
+    local bannedString = ""
+    for k,v in pairs(bans) do
+        bannedString = bannedString .. k .. ","
+    end
+    self.querySetBans = SQL:Command(self.sqlSetBans)
+    self.querySetBans:Bind(':bans', bannedString)
+    self.querySetBans:Bind(':faction', faction)
+    self.querySetBans:Execute()
+    --print("String: " .. bannedString)
+    return true
+end
+
+-- Return bool
+function AWGFactions:IsBanned(steamid,faction)
+    local banned = self:GetBans(faction)
+    if banned[steamid] then
+        return true
+    end
+    return false
+end
+
+-- Return bool
+function AWGFactions:AddBan(steamid,faction) -- Adding 2 extra , before ID ??????
+    if not self:IsBanned(steamid,faction) then
+        local banned = self:GetBans(faction)
+        banned[steamid] = true
+        self:SetBans(faction,banned)
+        --print("AddBan() setting ban for " .. steamid .. " to: " .. tostring(banned[steamid]))
+        return true
+    end
+    return false
+end
+
+-- Return bool
+function AWGFactions:DelBan(steamid,faction)
+    if self:IsBanned(steamid,faction) then
+        print("Player is definitely banned.")
+        local banned = self:GetBans(faction)
+        banned[steamid] = nil
+        self:SetBans(faction,banned)
+        return true
+    end
+    return false
 end
 
 -- Return bool
