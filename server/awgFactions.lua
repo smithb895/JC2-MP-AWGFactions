@@ -21,7 +21,7 @@ function AWGFactions:__init()
     self.timer = Timer()
     self.numTicks = 0
     self.delay = 10
-    print("Initializing AWGFactions serverside awgFactions.lua...")
+    print("Initializing serverside awgFactions.lua...")
     -- Init tables
     SQL:Execute("CREATE TABLE IF NOT EXISTS awg_members (steamid VARCHAR UNIQUE, faction VARCHAR, rank INTEGER, last_seen DATETIME DEFAULT CURRENT_TIMESTAMP)")
     SQL:Execute("CREATE TABLE IF NOT EXISTS awg_factions (faction VARCHAR UNIQUE, color VARCHAR, num_members INTEGER, banned VARCHAR, allies VARCHAR, enemies VARCHAR, passwd VARCHAR DEFAULT NULL, salt VARCHAR, created_on DATETIME DEFAULT CURRENT_TIMESTAMP)")
@@ -231,10 +231,65 @@ function AWGFactions:ParseChat(args)
                     "You are not currently in any faction!",
                     awgColors["neonorange"] )
             end
-        elseif msg[2] == "setrank" then -- check 2 args (player, rank)
-            -- Use Command Manager here?
-            print("setrank Not done yet")
-            args.player:SendChatMessage("This command has not yet been implemented!", awgColors["neonorange"] )
+        elseif msg[2] == "setrank" then -- check 2 args (rank, playername)
+            local result = self:GetFaction(mySteamID)
+            if #result > 0 then
+                local myFaction = result[1].faction
+                if mySteamID == self:GetLeader(myFaction) then
+                    if #msg > 3 then
+                        local numRank = msg[3]--:gsub('%D','')
+                        if numRank:match('%D') then
+                            args.player:SendChatMessage(
+                                    "Invalid rank number specified. Rank must be a number between 1 (lowest rank) and " .. tostring(#awgRanks) .. " (Leader rank). Press F5 for detailed help.",
+                                    awgColors["neonorange"] )
+                        else
+                            numRank = tonumber(numRank)
+                            if numRank > 0 and numRank <= #awgRanks then
+                                table.remove(msg, 3)
+                                table.remove(msg, 2)
+                                table.remove(msg, 1)
+                                local memberName = table.concat(msg, " ")
+                                local memberObj = self:GetPlayerByName(memberName)
+                                if memberObj ~= nil then -- Make sure player is online
+                                    local memberSteamID = memberObj:GetSteamId().id
+                                    local myFactionMembers = self:GetMemberIDs(myFaction)
+                                    if myFactionMembers[memberSteamID] then
+                                        if numRank == #awgRanks then -- player is transferring leadership
+                                            local myNewRank = #awgRanks - 1
+                                            self:SetRank(memberSteamID,numRank)
+                                            self:SetRank(mySteamID,myNewRank)
+                                            local transferMsg = myName .. " has transferred leadership of " .. myFaction .. " to " .. memberName
+                                            self:MsgFaction(myFaction,transferMsg,awgColors["neonlime"])
+                                            print(myName .. " has transferred leadership of " .. myFaction .. " to " .. memberName)
+                                        else
+                                            self:SetRank(memberSteamID,numRank)
+                                            memberObj:SendChatMessage(myName .. " just set your rank to: " .. awgRanks[numRank],
+                                            awgColors["neonlime"] )
+                                            args.player:SendChatMessage(memberName .. " is now rank: " .. awgRanks[numRank],
+                                            awgColors["neonlime"] )
+                                            print(myName .. " has set a new rank for " .. memberName .. " : " .. awgRanks[numRank])
+                                        end
+                                    else
+                                        args.player:SendChatMessage("Specified player is not in your faction! You can only set the rank of your own faction members!", awgColors["neonorange"] )
+                                    end
+                                else
+                                    args.player:SendChatMessage("Specified player is not online! Player must be online to change their rank!", awgColors["neonorange"] )
+                                end
+                            else
+                                args.player:SendChatMessage(
+                                        "Invalid rank number specified. Rank must be a number between 1 (lowest rank) and " .. tostring(#awgRanks) .. " (Leader rank). Press F5 for detailed help.",
+                                        awgColors["neonorange"] )
+                            end
+                        end
+                    else
+                        args.player:SendChatMessage("You must specify a desired rank (number) and a faction member's name.  Press F5 for detailed help.  Usage: /f setrank <rank> <playername>", awgColors["neonorange"] )
+                    end
+                else
+                    args.player:SendChatMessage("You are not the faction leader! Only the faction leader can set ranks for members!", awgColors["neonorange"] )
+                end
+            else
+                args.player:SendChatMessage("You are not in a faction!", awgColors["neonorange"] )
+            end
         elseif msg[2] == "players" then -- list online faction members
             local result = self:GetFaction(mySteamID)
             if #result > 0 then
@@ -353,6 +408,26 @@ function AWGFactions:ParseChat(args)
             awgColors["aquamarine"] )
         return false
     end
+end
+
+-- Return player object or nil
+function AWGFactions:GetPlayerByName(name)
+    for p in Server:GetPlayers() do
+        if name == p:GetName() then
+            return p
+        end
+    end
+    return nil
+end
+
+-- Return player object or nil
+function AWGFactions:GetPlayerBySteamID(steamid)
+    for p in Server:GetPlayers() do
+        if steamid == p:GetSteamId().id then
+            return p
+        end
+    end
+    return nil
 end
 
 function AWGFactions:IsColorUsable(color)
@@ -546,9 +621,11 @@ function AWGFactions:RandString()
 end
 
 -- Return bool
-function AWGFactions:SetRank(args)
-    -- TODO
-    print("SetRank not done yet")
+function AWGFactions:SetRank(steamid,rank)
+    self.querySetRank = SQL:Command(self.sqlSetRank)
+    self.querySetRank:Bind(1, rank)
+    self.querySetRank:Bind(2, steamid)
+    self.querySetRank:Execute()
     return true
 end
 
