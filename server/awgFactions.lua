@@ -17,6 +17,11 @@
 class 'AWGFactions'
 
 function AWGFactions:__init()
+    --==== Global Faction Admins ====--
+    -- Add SteamIDs (STEAM_0:0* format) to this table to give certain players ability to delete factions
+    self.globalAdmins = {"STEAM_0:1:4264226"}
+    --==== DO NOT EDIT BELOW THIS UNLESS YOU KNOW WHAT YOU'RE DOING ====--
+    
     -- Some init stuph could go here :3
     self.timer = Timer()
     self.numTicks = 0
@@ -237,7 +242,6 @@ function AWGFactions:ParseChat(args)
                         awgColors["red"] )
                 end
             else
-                print("Is this printing twice")
                 args.player:SendChatMessage(
                     "You are not currently in any faction!",
                     awgColors["neonorange"] )
@@ -248,7 +252,7 @@ function AWGFactions:ParseChat(args)
                 local myFaction = result[1].faction
                 if mySteamID == self:GetLeader(myFaction) then
                     if #msg > 3 then
-                        local numRank = msg[3]--:gsub('%D','')
+                        local numRank = msg[3]
                         if numRank:match('%D') then
                             args.player:SendChatMessage(
                                     "Invalid rank number specified. Rank must be a number between 1 (lowest rank) and " .. tostring(#awgRanks) .. " (Leader rank). Press F5 for detailed help.",
@@ -531,6 +535,98 @@ function AWGFactions:ParseChat(args)
             else
                 args.player:SendChatMessage("You are not in a faction!", awgColors["neonorange"] )
             end
+        elseif msg[2] == "ally" then -- toggle ally with faction
+            local result = self:GetFaction(mySteamID)
+            if #result > 0 then
+                local myFaction = result[1].faction
+                if mySteamID == self:GetLeader(myFaction) then
+                    if #msg > 2 then
+                        local factionName = msg[3]
+                        -- Should not contain non alphanumeric chars
+                        if factionName:match("%W") then
+                            args.player:SendChatMessage("Faction name contains invalid chars. Only alphanumeric allowed!",
+                            awgColors["neonorange"] )
+                        else
+                            if self:IsFaction(factionName) then
+                                if self:IsAlly(myFaction,factionName) then -- is already an ally
+                                    self:DelAlly(myFaction,factionName)
+                                    local allyMsg = myFaction .. " is no longer allied with " .. factionName
+                                    self:MsgFaction(myFaction,allyMsg,awgColors["neonlime"])
+                                    self:MsgFaction(factionName,allyMsg,awgColors["neonlime"])
+                                else
+                                    self:AddAlly(myFaction,factionName)
+                                    local allyMsg = myFaction .. " is now allied with " .. factionName
+                                    self:MsgFaction(myFaction,allyMsg,awgColors["neonlime"])
+                                    self:MsgFaction(factionName,allyMsg,awgColors["neonlime"])
+                                end
+                            else
+                                args.player:SendChatMessage("Specified faction does not exist!",awgColors["neonorange"] )
+                            end
+                        end
+                    else
+                        args.player:SendChatMessage("Ally or un-ally with faction. You must specify a faction name. Press F5 for detailed help.  Usage: /f ally <faction>", awgColors["neonorange"] )
+                    end
+                else
+                    args.player:SendChatMessage("You are not the faction leader! Only the faction leader can do this!", awgColors["neonorange"] )
+                end
+            else
+                args.player:SendChatMessage("You are not in a faction!", awgColors["neonorange"] )
+            end
+        elseif msg[2] == "enemy" then -- toggle enemy with faction
+            local result = self:GetFaction(mySteamID)
+            if #result > 0 then
+                local myFaction = result[1].faction
+                if mySteamID == self:GetLeader(myFaction) then
+                    if #msg > 2 then
+                        local factionName = msg[3]
+                        -- Should not contain non alphanumeric chars
+                        if factionName:match("%W") then
+                            args.player:SendChatMessage("Faction name contains invalid chars. Only alphanumeric allowed!",
+                            awgColors["neonorange"] )
+                        else
+                            if self:IsFaction(factionName) then
+                                if self:IsEnemy(myFaction,factionName) then -- is already an enemy
+                                    self:DelEnemy(myFaction,factionName)
+                                    local enemyMsg = myFaction .. " is no longer enemies with " .. factionName
+                                    self:MsgFaction(myFaction,enemyMsg,awgColors["lightsteelblue"])
+                                    self:MsgFaction(factionName,enemyMsg,awgColors["lightsteelblue"])
+                                else
+                                    self:AddEnemy(myFaction,factionName)
+                                    local enemyMsg = myFaction .. " is now enemies with " .. factionName
+                                    self:MsgFaction(myFaction,enemyMsg,awgColors["crimson"])
+                                    self:MsgFaction(factionName,enemyMsg,awgColors["crimson"])
+                                end
+                            else
+                                args.player:SendChatMessage("Specified faction does not exist!",awgColors["neonorange"] )
+                            end
+                        end
+                    else
+                        args.player:SendChatMessage("Enemy or un-enemy a faction. You must specify a faction name. Press F5 for detailed help.  Usage: /f enemy <faction>", awgColors["neonorange"] )
+                    end
+                else
+                    args.player:SendChatMessage("You are not the faction leader! Only the faction leader can do this!", awgColors["neonorange"] )
+                end
+            else
+                args.player:SendChatMessage("You are not in a faction!", awgColors["neonorange"] )
+            end
+        elseif msg[2] == "del" then
+            local mySteamIDstring = args.player:GetSteamId().string
+            for _,v in pairs(self.globalAdmins) do
+                if v == mySteamIDstring then
+                    local factionName = msg[3]
+                    -- Should not contain non alphanumeric chars
+                    if factionName:match("%W") then
+                        args.player:SendChatMessage("Faction name contains invalid chars. Only alphanumeric allowed!",
+                            awgColors["neonorange"] )
+                    else
+                        self:DelFaction(factionName)
+                        print("Admin " .. myName .. " deleted faction: " .. factionName)
+                        args.player:SendChatMessage("Deleted faction if it existed and removed any orphaned members: " .. factionName,
+                        awgColors["neonlime"] )
+                    end
+                    break
+                end
+            end
         else -- If not a faction command, treat as faction chat
             local msg = string.gsub(args.text, "/f ", "")
             --self.queryInFaction:Bind(1, mySteamID)
@@ -679,6 +775,17 @@ function AWGFactions:GetFaction(steamid)
     return result
 end
 
+-- Return bool
+function AWGFactions:IsFaction(faction)
+    self.queryIsFaction = SQL:Query(self.sqlIsFaction)
+    self.queryIsFaction:Bind(1, faction)
+    local result = self.queryIsFaction:Execute()
+    if #result > 0 then -- Faction exists
+        return true
+    end
+    return false
+end
+
 -- Return table
 function AWGFactions:GetMembersOnline(faction)
     local factionMembers = self:GetMemberIDs(faction)
@@ -813,6 +920,19 @@ function AWGFactions:GetAllies(faction)
     return allies
 end
 
+-- Return bool, input a TABLE
+function AWGFactions:SetAllies(faction,listTable)
+    local listString = ""
+    for k,v in pairs(listTable) do
+        listString = listString .. k .. ","
+    end
+    self.querySetAllies = SQL:Command(self.sqlSetAllies)
+    self.querySetAllies:Bind(':allies', listString)
+    self.querySetAllies:Bind(':faction', faction)
+    self.querySetAllies:Execute()
+    return true
+end
+
 -- Return table of enemy factions
 function AWGFactions:GetEnemies(faction)
     local enemies = {}
@@ -831,6 +951,19 @@ function AWGFactions:GetEnemies(faction)
         end
     end
     return enemies
+end
+
+-- Return bool, input a TABLE
+function AWGFactions:SetEnemies(faction,listTable)
+    local listString = ""
+    for k,v in pairs(listTable) do
+        listString = listString .. k .. ","
+    end
+    self.querySetEnemies = SQL:Command(self.sqlSetEnemies)
+    self.querySetEnemies:Bind(':enemies', listString)
+    self.querySetEnemies:Bind(':faction', faction)
+    self.querySetEnemies:Execute()
+    return true
 end
 
 -- Return table of faction banned steamids
@@ -878,12 +1011,78 @@ function AWGFactions:IsBanned(steamid,faction)
 end
 
 -- Return bool
+function AWGFactions:IsAlly(faction1,faction2)
+    local listTable = self:GetAllies(faction1)
+    if listTable[faction2] then
+        return true
+    end
+    return false
+end
+
+-- Return bool
+function AWGFactions:IsEnemy(faction1,faction2)
+    local listTable = self:GetEnemies(faction1)
+    if listTable[faction2] then
+        return true
+    end
+    return false
+end
+
+-- Return bool
+function AWGFactions:AddAlly(faction1,faction2)
+    -- Add faction2 to faction1's allies list
+    local listTable = self:GetAllies(faction1)
+    listTable[faction2] = true
+    self:SetAllies(faction1,listTable)
+    -- Add faction1 to faction2's allies list
+    listTable = self:GetAllies(faction2)
+    listTable[faction1] = true
+    self:SetAllies(faction2,listTable)
+    return true
+end
+
+-- Return bool
+function AWGFactions:DelAlly(faction1,faction2)
+    local listTable = self:GetAllies(faction1)
+    listTable[faction2] = nil
+    self:SetAllies(faction1,listTable)
+    
+    listTable = self:GetAllies(faction2)
+    listTable[faction1] = nil
+    self:SetAllies(faction2,listTable)
+    return true
+end
+
+-- Return bool
+function AWGFactions:AddEnemy(faction1,faction2)
+    local listTable = self:GetEnemies(faction1)
+    listTable[faction2] = true
+    self:SetEnemies(faction1,listTable)
+    
+    listTable = self:GetEnemies(faction2)
+    listTable[faction1] = true
+    self:SetEnemies(faction2,listTable)
+    return true
+end
+
+-- Return bool
+function AWGFactions:DelEnemy(faction1,faction2)
+    local listTable = self:GetEnemies(faction1)
+    listTable[faction2] = nil
+    self:SetEnemies(faction1,listTable)
+    
+    listTable = self:GetEnemies(faction2)
+    listTable[faction1] = nil
+    self:SetEnemies(faction2,listTable)
+    return true
+end
+
+-- Return bool
 function AWGFactions:AddBan(steamid,faction) -- Adding 2 extra , before ID ??????
     if not self:IsBanned(steamid,faction) then
         local banned = self:GetBans(faction)
         banned[steamid] = true
         self:SetBans(faction,banned)
-        --print("AddBan() setting ban for " .. steamid .. " to: " .. tostring(banned[steamid]))
         return true
     end
     return false
@@ -892,7 +1091,6 @@ end
 -- Return bool
 function AWGFactions:DelBan(steamid,faction)
     if self:IsBanned(steamid,faction) then
-        print("Player is definitely banned.")
         local banned = self:GetBans(faction)
         banned[steamid] = nil
         self:SetBans(faction,banned)
