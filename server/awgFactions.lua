@@ -2,7 +2,7 @@
     Title: AWG Factions
     Author: Anzu
     Org: http://www.AnzusWarGames.info
-    Version: 0.01
+    Version: 0.02
     Description: This factions mod was written from scratch by Anzu, with 
                 inspiration coming from the original factions mod written by
                 Philpax and the JC2-MP dev team. This script was meant for 
@@ -54,6 +54,10 @@ function AWGFactions:__init()
     self.sqlAllMembers = "SELECT m.steamid,m.faction,f.color FROM awg_members m JOIN awg_factions f ON m.faction=f.faction"
     self.sqlGetBans = "SELECT banned FROM awg_factions WHERE faction = (?)"
     self.sqlSetBans = "UPDATE awg_factions SET banned = (:bans) WHERE faction = (:faction)"
+    self.sqlGetAllies = "SELECT allies FROM awg_factions WHERE faction = (?)"
+    self.sqlSetAllies = "UPDATE awg_factions SET allies = (:allies) WHERE faction = (:faction)"
+    self.sqlGetEnemies = "SELECT enemies FROM awg_factions WHERE faction = (?)"
+    self.sqlSetEnemies = "UPDATE awg_factions SET enemies = (:enemies) WHERE faction = (:faction)"
     --self.queryLastSeen = SQL:Query(self.sqlLastSeen)
     --self.queryFactionEst = SQL:Query(self.sqlFactionEst)
     --self.queryCountMembers = SQL:Query(self.sqlCountMembers)
@@ -787,6 +791,46 @@ function AWGFactions:GetRank(steamid)
         return tonumber(result[1].rank)
     end
     return 0
+end
+
+-- Return table of allied factions
+function AWGFactions:GetAllies(faction)
+    local allies = {}
+    self.queryGetAllies = SQL:Query(self.sqlGetAllies)
+    self.queryGetAllies:Bind(1, faction)
+    local result = self.queryGetAllies:Execute()
+    if #result > 0 then
+        local alliesString = result[1].allies
+        if alliesString ~= nil then
+            local alliesTmp = alliesString:split(',')
+            for i=1,#alliesTmp do
+                if string.len(alliesTmp[i]) > 1 then
+                    allies[alliesTmp[i]] = true
+                end
+            end
+        end
+    end
+    return allies
+end
+
+-- Return table of enemy factions
+function AWGFactions:GetEnemies(faction)
+    local enemies = {}
+    self.queryGetEnemies = SQL:Query(self.sqlGetEnemies)
+    self.queryGetEnemies:Bind(1, faction)
+    local result = self.queryGetEnemies:Execute()
+    if #result > 0 then
+        local enemiesString = result[1].enemies
+        if enemiesString ~= nil then
+            local enemiesTmp = enemiesString:split(',')
+            for i=1,#enemiesTmp do
+                if string.len(enemiesTmp[i]) > 1 then
+                    enemies[enemiesTmp[i]] = true
+                end
+            end
+        end
+    end
+    return enemies
 end
 
 -- Return table of faction banned steamids

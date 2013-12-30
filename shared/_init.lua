@@ -1,3 +1,18 @@
+--[[
+    Title: AWG Factions
+    Author: Anzu
+    Org: http://www.AnzusWarGames.info
+    Version: 0.02
+    Description: This factions mod was written from scratch by Anzu, with 
+                inspiration coming from the original factions mod written by
+                Philpax and the JC2-MP dev team. This script was meant for 
+                public use amongst the JC2-MP community. Anyone is free to use
+                and modify this as long as they give me credit for the code 
+                I've written and don't try to commercialize it. It's a free
+                mod after all, right? :) If you want to help code more features
+                and fix bugs, please clone it on Github!
+                    https://github.com/smithb895/JC2-MP-AWGFactions
+--]]
 
 factionMembers = {}
 awgRanks = {"Member","Officer","Leader"}
