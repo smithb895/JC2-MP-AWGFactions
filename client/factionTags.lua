@@ -18,18 +18,51 @@ class 'AWGFactions'
 
 
 function AWGFactions:__init()
-    -- Receive table with faction members in format: {[steamid] = {"FactionName", Color(1,2,3)}}
     print("Initializing AWGFactions clientside factionTags.lua...")
     --Network:Subscribe("FactionMembers", function(args) factionMembers = args end)
+    self.mySteamID = LocalPlayer:GetSteamId().id
+    
+    -- Receive table with faction members in format: {[steamid] = {"FactionName", Color(1,2,3)}}
     Network:Subscribe("FactionMembers", self, self.ReceiveMembers)
+    -- Receive table with allied factions in format: {[faction] = {["Faction1"] = true,["Faction2"] = true}}
+    Network:Subscribe("AlliedFactions", self, self.ReceiveAllies)
+    -- Receive table with enemy factions in format: {[faction] = {["Faction1"] = true,["Faction2"] = true}}
+    Network:Subscribe("EnemyFactions", self, self.ReceiveEnemies)
+    -- Render Faction tags
     Events:Subscribe( "Render", self, self.RenderTag)
+    
+    Events:Subscribe("LocalPlayerExplosionHit", self, self.HandleDamage)
+    Events:Subscribe("LocalPlayerBulletHit", self, self.HandleDamage)
+    Events:Subscribe("LocalPlayerForcePulseHit", self, self.HandleDamage)
 end
 
 function AWGFactions:ReceiveMembers(args)
-    print("Receiving list of all online faction players")
+    --print("Receiving list of all online faction players")
     factionMembers = args
     --for k,v in pairs(factionMembers) do
     --    print(k .. " : { " .. v[1])
+    --end
+end
+
+function AWGFactions:ReceiveAllies(args)
+    --print("Receiving list of allied factions")
+    alliedFactions = args
+    --for k,v in pairs(alliedFactions) do
+    --    print(k .. " allies:")
+    --    for i,d in pairs(v) do
+    --        print(i)
+    --    end
+    --end
+end
+
+function AWGFactions:ReceiveEnemies(args)
+    --print("Receiving list of enemy factions")
+    enemyFactions = args
+    --for k,v in pairs(enemyFactions) do
+    --    print(k .. " enemies:")
+    --    for i,d in pairs(v) do
+    --        print(i)
+    --    end
     --end
 end
 
@@ -44,11 +77,11 @@ function AWGFactions:DrawShadowedText( pos, text, colour, size, scale )
     Render:DrawText( pos, text, colour, size, scale )
 end
 
-function AWGFactions:DrawFactionTag(playerPos,dist,faction,color)
+function AWGFactions:DrawFactionTag(playerPos,dist,text,color,scaleText)
+    local scaleText = scaleText or 1.0
     local pos = playerPos + Vector3( 0, 2.5, 0 )
     local angle = Angle( Camera:GetAngle().yaw, 0, math.pi ) * Angle( math.pi, 0, 0 )
 
-    local text = "[" .. faction .. "]"
     local text_size = Render:GetTextSize( text, TextSize.Default )
     
     local worldRange = 300
@@ -62,7 +95,6 @@ function AWGFactions:DrawFactionTag(playerPos,dist,faction,color)
     elseif dist >= 200 then
         --scale = (1 - (math.clamp( dist, 200, 800 ) - 1)/1) * scaleRange
     end
-    
 
     local t = Transform3()
     t:Translate( pos )
@@ -80,7 +112,51 @@ function AWGFactions:DrawFactionTag(playerPos,dist,faction,color)
     --    alpha_factor = (1 - (math.clamp( dist, 600, 800 ) - 1)/1) * 255
     --end
 
-    self:DrawShadowedText( Vector3( 0, 0, 0 ), text, color, TextSize.Default )
+    self:DrawShadowedText( Vector3( 0, 0, 0 ), text, color, TextSize.Default, scaleText )
+end
+
+function AWGFactions:ClientGetFaction(steamid)
+    local theFaction = ""
+    if factionMembers[steamid] ~= nil then
+        theFaction = factionMembers[steamid][1]
+    end
+    return theFaction
+end
+
+function AWGFactions:IsMyAlly(steamid)
+    local myFaction = self:ClientGetFaction(LocalPlayer:GetSteamId().id)
+    local theirFaction = self:ClientGetFaction(steamid)
+    if myFaction:len() > 0 and theirFaction:len() > 0 then
+        local myAllies = alliedFactions[myFaction]
+        if myAllies[theirFaction] or theirFaction == myFaction then
+            --print(myFaction .. " is allies with " .. theirFaction)
+            return true
+        end
+    end
+    return false
+end
+
+function AWGFactions:IsMyEnemy(steamid)
+    local myFaction = self:ClientGetFaction(LocalPlayer:GetSteamId().id)
+    local theirFaction = self:ClientGetFaction(steamid)
+    if myFaction:len() > 0 and theirFaction:len() > 0 then
+        local myEnemies = enemyFactions[myFaction]
+        if myEnemies[theirFaction] then
+            --print(myFaction .. " is enemies with " .. theirFaction)
+            return true
+        end
+    end
+    return false
+end
+
+function AWGFactions:HandleDamage(args)
+    local attacker = args.attacker:GetSteamId().id
+    if factionMembers[attacker] then
+        if self:IsMyAlly(attacker) then
+            return false
+        end
+    end
+    return true
 end
 
 function AWGFactions:RenderTag()
@@ -93,7 +169,14 @@ function AWGFactions:RenderTag()
                 local dist = playerPos:Distance2D( Camera:GetPosition() )
                 if dist < 800 then
                     local steamid = ply:GetSteamId().id
-                    self:DrawFactionTag(playerPos,dist,factionMembers[steamid][1],factionMembers[steamid][2])
+                    self:DrawFactionTag(playerPos,dist,"[" .. factionMembers[steamid][1] .. "]",factionMembers[steamid][2])
+                    if self:IsMyAlly(steamid) then
+                        local tagPos = playerPos + Vector3(0,0.3,0)
+                        self:DrawFactionTag(tagPos,dist,"(Ally)",awgColors["brightgreen"],0.8)
+                    elseif self:IsMyEnemy(steamid) then
+                        local tagPos = playerPos + Vector3(0,0.3,0)
+                        self:DrawFactionTag(tagPos,dist,"(Enemy)",awgColors["red"],0.8)
+                    end
                 end
             end
         end

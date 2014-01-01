@@ -15,6 +15,8 @@
 --]]
 
 factionMembers = {}
+alliedFactions = {}
+enemyFactions = {}
 awgRanks = {"Member","Officer","Leader"}
 awgColors = { 
     ["lightpink"] = Color(255,182,193),

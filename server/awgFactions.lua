@@ -25,7 +25,7 @@ function AWGFactions:__init()
     -- Some init stuph could go here :3
     self.timer = Timer()
     self.numTicks = 0
-    self.delay = 10
+    self.delay = 4
     print("Initializing serverside awgFactions.lua...")
     -- Init tables
     SQL:Execute("CREATE TABLE IF NOT EXISTS awg_members (steamid VARCHAR UNIQUE, faction VARCHAR, rank INTEGER, last_seen DATETIME DEFAULT CURRENT_TIMESTAMP)")
@@ -68,11 +68,18 @@ function AWGFactions:__init()
     --self.queryCountMembers = SQL:Query(self.sqlCountMembers)
 
     Events:Subscribe("PlayerChat", self, self.ParseChat)
-    Events:Subscribe("PlayerJoin", self, self.BroadcastMembers)
-    Events:Subscribe("PlayerQuit", self, self.BroadcastMembers)
-    Events:Subscribe("ModulesLoad", self, self.BroadcastMembers)
-    Events:Subscribe("ModuleLoad", self, self.BroadcastMembers)
+    Events:Subscribe("PlayerJoin", self, self.BroadcastFactionTables)
+    Events:Subscribe("PlayerQuit", self, self.BroadcastFactionTables)
+    Events:Subscribe("PlayerDeath", self, self.OnPlayerDeath)
+    --Events:Subscribe("ModulesLoad", self, self.BroadcastFactionTables)
+    --Events:Subscribe("ModuleLoad", self, self.BroadcastFactionTables)
     self.initialDelay = Events:Subscribe("PreTick", self, self.InitialDelay)
+end
+
+function AWGFactions:BroadcastFactionTables(args)
+    self:BroadcastMembers()
+    self:BroadcastAllies()
+    self:BroadcastEnemies()
 end
 
 function AWGFactions:WipeDB()
@@ -738,6 +745,8 @@ function AWGFactions:JoinFaction(faction,steamid,rank,name)
     self.queryUpdateNumMembers:Bind(':faction', faction)
     self.queryUpdateNumMembers:Execute()
     self:BroadcastMembers()
+    self:BroadcastAllies()
+    self:BroadcastEnemies()
     --transaction:Commit()
     return true
 end
@@ -762,6 +771,8 @@ function AWGFactions:QuitFaction(steamid,faction,name)
         self.queryUpdateNumMembers:Bind(':faction', faction)
         self.queryUpdateNumMembers:Execute()
         self:BroadcastMembers()
+        self:BroadcastAllies()
+        self:BroadcastEnemies()
         --transaction:Commit()
     end
     return true
@@ -900,7 +911,7 @@ function AWGFactions:GetRank(steamid)
     return 0
 end
 
--- Return table of allied factions
+-- Return table of allied factions. format: {["faction"] = true}
 function AWGFactions:GetAllies(faction)
     local allies = {}
     self.queryGetAllies = SQL:Query(self.sqlGetAllies)
@@ -930,6 +941,8 @@ function AWGFactions:SetAllies(faction,listTable)
     self.querySetAllies:Bind(':allies', listString)
     self.querySetAllies:Bind(':faction', faction)
     self.querySetAllies:Execute()
+    
+    self:BroadcastAllies()
     return true
 end
 
@@ -963,6 +976,8 @@ function AWGFactions:SetEnemies(faction,listTable)
     self.querySetEnemies:Bind(':enemies', listString)
     self.querySetEnemies:Bind(':faction', faction)
     self.querySetEnemies:Execute()
+    
+    self:BroadcastEnemies()
     return true
 end
 
@@ -1030,6 +1045,9 @@ end
 
 -- Return bool
 function AWGFactions:AddAlly(faction1,faction2)
+    if self:IsEnemy(faction1,faction2) then
+        self:DelEnemy(faction1,faction2)
+    end
     -- Add faction2 to faction1's allies list
     local listTable = self:GetAllies(faction1)
     listTable[faction2] = true
@@ -1055,6 +1073,10 @@ end
 
 -- Return bool
 function AWGFactions:AddEnemy(faction1,faction2)
+    if self:IsAlly(faction1,faction2) then
+        self:DelAlly(faction1,faction2)
+    end
+    
     local listTable = self:GetEnemies(faction1)
     listTable[faction2] = true
     self:SetEnemies(faction1,listTable)
@@ -1078,7 +1100,7 @@ function AWGFactions:DelEnemy(faction1,faction2)
 end
 
 -- Return bool
-function AWGFactions:AddBan(steamid,faction) -- Adding 2 extra , before ID ??????
+function AWGFactions:AddBan(steamid,faction)
     if not self:IsBanned(steamid,faction) then
         local banned = self:GetBans(faction)
         banned[steamid] = true
@@ -1126,7 +1148,7 @@ function AWGFactions:GetColorList()
     return colorList
 end
 
--- Return factionMembers table
+-- Return factionMembers table. format: {[steamid] = {"FactionName", Color(1,2,3)}}
 function AWGFactions:GetAllFactionMembers()
     local allMembers = {}
     self.queryAllMembers = SQL:Query(self.sqlAllMembers)
@@ -1146,6 +1168,53 @@ function AWGFactions:GetAllFactionMembers()
     return allMembers
 end
 
+-- Return alliedFactions table. format: {[faction] = {["Faction1"] = true,["Faction2"] = true}}
+function AWGFactions:GetAlliedFactions()
+    local onlineMembers = self:GetAllFactionMembers()
+    local factionTable = {}
+    for k,v in pairs(onlineMembers) do
+        if factionTable[v[1]] == nil then
+            local otherFactions = self:GetAllies(v[1])
+            --print(v[1] .. " is allied with:")
+            --for k,v in pairs(otherFactions) do
+            --    print(k)
+            --end
+            factionTable[v[1]] = otherFactions
+        end
+    end
+    return factionTable
+end
+
+-- Return enemyFactions table. format: {[faction] = {["Faction1"] = true,["Faction2"] = true}}
+function AWGFactions:GetEnemyFactions()
+    local onlineMembers = self:GetAllFactionMembers()
+    local factionTable = {}
+    for k,v in pairs(onlineMembers) do
+        if factionTable[v[1]] == nil then
+            local otherFactions = self:GetEnemies(v[1])
+            --print(v[1] .. " is enemies with:")
+            --for k,v in pairs(otherFactions) do
+            --    print(k)
+            --end
+            factionTable[v[1]] = otherFactions
+        end
+    end
+    return factionTable
+end
+
+
+-- Broadcast enemyFactions table to all players
+function AWGFactions:BroadcastEnemies()
+    local allMembers = self:GetEnemyFactions()
+    Network:Broadcast("EnemyFactions", allMembers)
+end
+
+-- Broadcast alliedFactions table to all players
+function AWGFactions:BroadcastAllies()
+    local allMembers = self:GetAlliedFactions()
+    Network:Broadcast("AlliedFactions", allMembers)
+end
+
 -- Broadcast factionMembers table to all players
 function AWGFactions:BroadcastMembers()
     local allMembers = self:GetAllFactionMembers()
@@ -1161,11 +1230,42 @@ end
 function AWGFactions:InitialDelay(args)
     self.numTicks = self.numTicks + 1
     if self.timer:GetSeconds() > self.delay then
-        print("Firing off BroadcastMembers after initial delay")
+        print("Broadcasting faction tables after initial delay.")
         self:BroadcastMembers()
+        self:BroadcastAllies()
+        self:BroadcastEnemies()
         self.timer:Restart()
         numTicks = 0
         Events:Unsubscribe(self.initialDelay)
+    end
+end
+
+function AWGFactions:OnPlayerDeath(args)
+    if args.killer then
+        local killerID = args.killer:GetSteamId().id
+        local victimID = args.player:GetSteamId().id
+        local result1 = self:GetFaction(victimID)
+        local result2 = self:GetFaction(killerID)
+        if #result1 > 0 and #result2 > 0 then
+            local victimFaction = result1[1].faction
+            local killerFaction = result2[1].faction
+            if self:IsEnemy(victimFaction,killerFaction) then
+                local leader = 0
+                if victimID == self:GetLeader(victimFaction) then
+                    leader = 1
+                end
+                if leader == 1 then
+                    local bonus = 10000
+                    args.killer:SendChatMessage("You've received a $10,000 bonus for killing an enemy faction leader! Excellent work!",
+                    awgColors["neonlime"] )
+                else
+                    local bonus = 5000
+                    args.killer:SendChatMessage("You've received a $5,000 bonus for killing an enemy faction member! Nice job!",
+                    awgColors["neonlime"] )
+                end
+                args.killer:SetMoney(args.killer:GetMoney()+bonus)
+            end
+        end
     end
 end
 
