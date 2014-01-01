@@ -2,7 +2,7 @@
     Title: AWG Factions
     Author: Anzu
     Org: http://www.AnzusWarGames.info
-    Version: 0.02
+    Version: 0.03
     Description: This factions mod was written from scratch by Anzu, with 
                 inspiration coming from the original factions mod written by
                 Philpax and the JC2-MP dev team. This script was meant for 
@@ -37,7 +37,7 @@ function AWGFactions:ModulesLoad()
                 "See usage details below. When using '/f join', if the specified faction name does\n" ..
                 "not already exist, it is created. The password is optional when creating a new \n" ..
                 "faction, but required to join one that has a password.  When a faction leader leaves\n" ..
-                "the faction, it is deleted and all its members are disbanded.\n\n" ..
+                "the faction, it is deleted and all its members are disbanded.  Killing enemy faction members will grant you a $5,000 bonus and $10,000 for killing the enemy faction leader.  Allied faction members have friendly-fire off, so they cannot harm each other will guns.\n\n" ..
                 "Usage:\n\n  Joining/Creating a faction:\n\n    /f join <faction> <password>\n\n" ..
                 "  Leaving a faction:\n\n    /f leave\n\n" ..
                 "  Using faction chat:\n\n    /f <chat message>\n\n" ..
@@ -49,6 +49,8 @@ function AWGFactions:ModulesLoad()
                 "  Kick faction member (Must be leader.):\n\n    /f kick <member's name>\n\n" ..
                 "  Ban faction member (Must be leader.):\n\n    /f ban <member's name>\n\n" ..
                 "  Unban a player (Must be leader.):\n\n    /f unban <member's name>\n\n" ..
+                "  Toggle ally with a faction:\n\n    /f ally <faction>\n\n" ..
+                "  Toggle enemy with a faction:\n\n    /f enemy <faction>\n\n" ..
                 "\n\nMore features coming soon! :)\n\n" ..
                 "\n\nThis factions mod was written from scratch by Anzu of www.AnzusWarGames.info,\n" ..
                 "with inspiration for the script coming from the original factions mod written by\n" ..

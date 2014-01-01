@@ -2,7 +2,7 @@
     Title: AWG Factions
     Author: Anzu
     Org: http://www.AnzusWarGames.info
-    Version: 0.01
+    Version: 0.03
     Description: This factions mod was written from scratch by Anzu, with 
                 inspiration coming from the original factions mod written by
                 Philpax and the JC2-MP dev team. This script was meant for 
