@@ -71,8 +71,8 @@ function AWGFactions:__init()
     Events:Subscribe("PlayerJoin", self, self.BroadcastFactionTables)
     Events:Subscribe("PlayerQuit", self, self.BroadcastFactionTables)
     Events:Subscribe("PlayerDeath", self, self.OnPlayerDeath)
-    --Events:Subscribe("ModulesLoad", self, self.BroadcastFactionTables)
-    --Events:Subscribe("ModuleLoad", self, self.BroadcastFactionTables)
+    Events:Subscribe("ModulesLoad", self, self.BroadcastFactionTables)
+    Events:Subscribe("ModuleLoad", self, self.BroadcastFactionTables)
     self.initialDelay = Events:Subscribe("PreTick", self, self.InitialDelay)
 end
 
