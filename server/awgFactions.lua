@@ -25,12 +25,13 @@ function AWGFactions:__init()
     -- Some init stuph could go here :3
     self.timer = Timer()
     self.numTicks = 0
-    self.delay = 4
+    self.delay = 1
     print("Initializing serverside awgFactions.lua...")
     -- Init tables
     SQL:Execute("CREATE TABLE IF NOT EXISTS awg_members (steamid VARCHAR UNIQUE, faction VARCHAR, rank INTEGER, last_seen DATETIME DEFAULT CURRENT_TIMESTAMP)")
     SQL:Execute("CREATE TABLE IF NOT EXISTS awg_factions (faction VARCHAR UNIQUE, color VARCHAR, num_members INTEGER, banned VARCHAR, allies VARCHAR, enemies VARCHAR, passwd VARCHAR DEFAULT NULL, salt VARCHAR, created_on DATETIME DEFAULT CURRENT_TIMESTAMP)")
-        
+    
+    
     -- Indices supported???
     --SQL:Execute("CREATE INDEX steamid_index ON awg_factions(steamid)")
     
@@ -67,12 +68,8 @@ function AWGFactions:__init()
     --self.queryFactionEst = SQL:Query(self.sqlFactionEst)
     --self.queryCountMembers = SQL:Query(self.sqlCountMembers)
 
-    Events:Subscribe("PlayerChat", self, self.ParseChat)
-    Events:Subscribe("PlayerJoin", self, self.BroadcastFactionTables)
-    Events:Subscribe("PlayerQuit", self, self.BroadcastFactionTables)
-    Events:Subscribe("PlayerDeath", self, self.OnPlayerDeath)
-    Events:Subscribe("ModulesLoad", self, self.BroadcastFactionTables)
-    Events:Subscribe("ModuleLoad", self, self.BroadcastFactionTables)
+    --Events:Subscribe("ModulesLoad", self, self.BroadcastFactionTables)
+    --Events:Subscribe("ModuleLoad", self, self.BroadcastFactionTables)
     self.initialDelay = Events:Subscribe("PreTick", self, self.InitialDelay)
 end
 
@@ -80,6 +77,34 @@ function AWGFactions:BroadcastFactionTables(args)
     self:BroadcastMembers()
     self:BroadcastAllies()
     self:BroadcastEnemies()
+end
+
+function AWGFactions:CheckDB()
+    print("Checking to see if tables need updating...")
+    local updated = 0
+    local numColumns = 9
+    local tableCheck = SQL:Query("PRAGMA table_info(awg_factions)")
+    local result = tableCheck:Execute()
+    if #result ~= 9 then 
+        self:UpdateDB()
+        updated = 1
+    end
+    if updated ~= 1 then
+        print("Database already up to date")
+    end
+end
+
+function AWGFactions:UpdateDB()
+    -- Update the database
+    -- This can be run from server console by typing "lua awgfactions AWGFactions:UpdateDB()"
+    -- You must reload the module after doing this, otherwise you're going to get errors :P
+    print("Updating database...")
+    SQL:Execute('ALTER TABLE awg_factions ADD color VARCHAR DEFAULT "darkred"')
+    SQL:Execute('ALTER TABLE awg_factions ADD banned VARCHAR')
+    SQL:Execute("ALTER TABLE awg_factions ADD allies VARCHAR")
+    SQL:Execute("ALTER TABLE awg_factions ADD enemies VARCHAR")
+    print("Database updated.")
+    return true
 end
 
 function AWGFactions:WipeDB()
@@ -1230,10 +1255,17 @@ end
 function AWGFactions:InitialDelay(args)
     self.numTicks = self.numTicks + 1
     if self.timer:GetSeconds() > self.delay then
-        print("Broadcasting faction tables after initial delay.")
+        print("Initializing...")
+        -- Check to make sure tables are updated
+        self:CheckDB()
+        -- Send out initial tables of faction players
         self:BroadcastMembers()
         self:BroadcastAllies()
         self:BroadcastEnemies()
+        Events:Subscribe("PlayerChat", self, self.ParseChat)
+        Events:Subscribe("PlayerJoin", self, self.BroadcastFactionTables)
+        Events:Subscribe("PlayerQuit", self, self.BroadcastFactionTables)
+        Events:Subscribe("PlayerDeath", self, self.OnPlayerDeath)
         self.timer:Restart()
         numTicks = 0
         Events:Unsubscribe(self.initialDelay)
